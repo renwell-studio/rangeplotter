@@ -70,8 +70,8 @@ def export_viewshed_kml(
         f'        <fill>{fill_val}</fill>',
         '      </PolyStyle>',
         '    </Style>',
-        '    <Folder>',
-        f'      <name>{sensor_name} Data</name>',
+        # '    <Folder>',
+        # f'      <name>{sensor_name} Data</name>',
         '      <Placemark>',
         f'        <name>{sensor_name} Location</name>',
         '        <styleUrl>#sensorStyle</styleUrl>',
@@ -112,7 +112,7 @@ def export_viewshed_kml(
 
     kml_content.append('        </MultiGeometry>')
     kml_content.append('      </Placemark>')
-    kml_content.append('    </Folder>')
+    # kml_content.append('    </Folder>')
     kml_content.append('  </Document>')
     kml_content.append('</kml>')
 
