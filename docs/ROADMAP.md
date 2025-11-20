@@ -17,27 +17,22 @@
 - **DEM**: Copernicus GLO-30 integration working.
 - **Export**: Basic KML polygon export.
 
-## 4. Upcoming Features
-### Feature: Detection Range Clipping
-**Goal**: Allow users to limit the calculated viewshed to a specific maximum range (e.g., 100km) to simulate radar instrument limits.
+## 4. Performance Optimization
+### Feature: Memory-Efficient DEM Reprojection
+**Goal**: Optimize the `viewshed` command's "Reprojecting DEM" stage to reduce memory usage and improve CPU utilization. Currently, it merges all DEM tiles into a large in-memory array before reprojection, which is memory-bound and inefficient.
 
 **Implementation Plan**:
-1.  **Refactor Viewshed Export**:
-    *   Update `viewshed` command to output a single KML file per sensor/altitude.
-    *   The KML will contain a `<Folder>` with:
-        *   A `<Placemark>` for the Sensor Location (Point).
-        *   A `<Placemark>` for the Viewshed (Polygon).
-    *   This ensures the file is self-contained and easy to process.
+1.  **Refactor `_reproject_dem_to_aeqd`**:
+    *   Remove the `rasterio.merge.merge` step which creates a monolithic source array.
+    *   Allocate the destination AEQD array (using disk-swap if necessary, as currently implemented).
+    *   Iterate through each source DEM tile:
+        *   Open the tile.
+        *   Reproject the tile directly into the destination array using `rasterio.warp.reproject`.
+        *   Use `num_threads` to enable multi-threaded processing during reprojection.
+    *   This approach mimics the memory benefits of a Virtual Raster (VRT) by avoiding the intermediate mosaic.
 
-2.  **Implement `detection-range` Command**:
-    *   Input: Existing viewshed KML file(s).
-    *   Argument: `--range` (km).
-    *   Logic:
-        *   Parse KML to find Sensor Point and Viewshed Polygon.
-        *   Create a geodesic circle (polygon) of radius `--range` around the Sensor Point.
-        *   Compute intersection: `Viewshed ∩ RangeCircle`.
-        *   Add the result as a new `<Placemark>` to the KML folder.
-    *   Output: Updated KML file.
+2.  **Concurrency**:
+    *   Ensure `reproject` is called with appropriate threading options (e.g., `num_threads=-1` for all cores).
 
 ## 5. Future Work
 - Union polygons across multiple radars.

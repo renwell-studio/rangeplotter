@@ -22,20 +22,25 @@
 - [x] get output file structure working inside the kml file so I can import the out structure
 - [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
 - [ ] make -h work as well as --help
-- [ ] make output kml inherit polygon style from input
-- [ ] make detection-range function save output correctly
+- [x] make output kml inherit polygon style from input
+- [x] make detection-range function save output correctly
 - [x] fix double nested folders in imported kml
 - [x] fix output file/folder naming:
  - top level - site(s) name - same name as input kml
  - next level - individual sites and union folder (this level only exists if necessary)
  - next level - max sensor ranges
  - next level - target altitudes
-- [ ] change target altitudes to agl throughout??
+- [ ] new feature - change target altitudes to agl throughout
+- [ ] new feature - unions
 - [ ] general review for deprecated/redundant code and commands
+- [ ] review CPU usage - see if we can get the machine working harder.
+- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
+- [ ] adjust commands so input flag assumes path is input/
+- [ ] user documentation to explain the primary workflow and behaviour: viewshed -> detection-range
 
 # Extended feature set:
 - [ ] add functionality for true radar visibility (taking radar cross section, frequency, etc as inputs).
- - [ ] or a simpler version that applies a max detection range for an array of target types, and superposes that onto a pre-calculated viewshed, to output a set of viewsheds for different target types, all at a given target altitude, and having only calculated that viewshed once.
+ - [x] or a simpler version that applies a max detection range for an array of target types, and superposes that onto a pre-calculated viewshed, to output a set of viewsheds for different target types, all at a given target altitude, and having only calculated that viewshed once.
  - [ ] does radar diffraction work horizontally as well? i.e. where a small, tall island causes a long thin 'shadow' behind, will the radar bem (and return) refract to allow observation behind it?
 - [ ] add functionality to create and visualise a 3d observed volume? Can google earth do this?
  - [ ] probably not directly, but could stack surfaces of difference colour/opacity to represent detections at different altitudes, etc.
