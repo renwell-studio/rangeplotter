@@ -1,0 +1,150 @@
+# -----------------------------------------------------------------------------
+# Visibility Analysis Configuration
+# -----------------------------------------------------------------------------
+
+# Path to the input KML file containing radar locations.
+# Can be absolute or relative to the project root.
+# Is this still needed?
+radars_kml: "input/radars_sample.kml"
+
+# Directory where output files (KML/KMZ) will be saved.
+output_dir: "output"
+
+# Directory for caching downloaded DEM tiles and intermediate data.
+cache_dir: "data_cache"
+
+# List of target altitudes in meters above Mean Sea Level (MSL).
+# Visibility will be calculated for each of these altitudes.
+# Default list: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
+altitudes_msl_m: [50]
+
+# Height of the radar antenna (radome) above ground level (AGL) in meters.
+radome_height_m_agl: 5.0
+
+# Atmospheric refraction factor (k-factor).
+# Standard atmosphere is typically 1.333 (4/3 Earth radius).
+atmospheric_k_factor: 1.333
+
+# Strategy for the Coordinate Reference System (CRS) used for calculations.
+# Options:
+#   - "auto_aeqd": Automatically use an Azimuthal Equidistant projection centered on each radar (recommended for accuracy).
+#   - "manual:EPSG:XXXX": Force a specific EPSG code (e.g., "manual:EPSG:32630").
+working_crs_strategy: "auto_aeqd"
+
+# Maximum number of threads to use for I/O bound tasks (e.g., downloading).
+max_threads: 8
+
+# Tolerance in meters for simplifying the output polygon geometry.
+# Higher values result in smaller files but less detailed borders.
+simplify_tolerance_m: 5.0
+
+# Output format for the visibility polygons.
+# Options: "KML", "KMZ", "GeoJSON"
+export_format: "KML"
+
+# Number of decimal places for coordinates in the output.
+precision: 9
+
+# -----------------------------------------------------------------------------
+# Visual Style Settings
+# -----------------------------------------------------------------------------
+style:
+  # Hex color code for the polygon outline.
+  line_color: "#FFA500"
+  # Width of the polygon outline in pixels.
+  line_width: 2
+  # Hex color code for the polygon fill (optional, null for no fill).
+  fill_color: "#FFA500"
+  # Opacity of the fill (0.0 to 1.0).
+  fill_opacity: 0.5
+
+# -----------------------------------------------------------------------------
+# Concurrency & Parallel Processing
+# -----------------------------------------------------------------------------
+concurrency:
+  # Execution mode.
+  # Options: "process" (recommended for CPU-bound tasks), "thread"
+  mode: "process"
+  # Maximum number of worker processes/threads.
+  max_workers: 18
+  # Number of CPUs to leave free for the OS and other tasks.
+  reserve_cpus: 4
+
+# -----------------------------------------------------------------------------
+# Resource Management
+# -----------------------------------------------------------------------------
+resources:
+  # Maximum percentage of system RAM to use before swapping to disk or throttling.
+  max_ram_percent: 80.0
+  # Whether to use disk-backed arrays for large DEMs.
+  use_disk_swap: true
+
+# -----------------------------------------------------------------------------
+# Progress Reporting
+# -----------------------------------------------------------------------------
+progress:
+  # Enable or disable progress bars in the terminal.
+  enabled: true
+  # Refresh rate for progress bars in Hz.
+  refresh_hz: 10
+
+# -----------------------------------------------------------------------------
+# Earth Model Settings
+# -----------------------------------------------------------------------------
+earth_model:
+  # Type of Earth model. Currently only "ellipsoidal" is supported.
+  type: "ellipsoidal"
+  # Reference ellipsoid.
+  ellipsoid: "WGS84"
+
+# -----------------------------------------------------------------------------
+# Vertical Reference Settings
+# -----------------------------------------------------------------------------
+vertical:
+  # Reference for target altitudes.
+  # Options: "msl" (Mean Sea Level)
+  target_altitude_reference: "msl"
+  # Vertical datum for the DEM.
+  # Copernicus GLO-30 uses EGM2008.
+  dem_vertical_reference: "EGM2008"
+
+# -----------------------------------------------------------------------------
+# Multiscale Processing (Level of Detail)
+# -----------------------------------------------------------------------------
+multiscale:
+  # Enable multiscale processing to vary resolution with distance.
+  enable: true
+  # Distance thresholds (in meters) for switching resolutions.
+  near_m: 50000
+  mid_m: 200000
+  far_m: 800000
+  # Resolution (in meters) for each distance zone.
+  res_near_m: 30
+  res_mid_m: 120
+  res_far_m: 1000
+
+# -----------------------------------------------------------------------------
+# Copernicus Data Space Ecosystem (CDSE) API
+# -----------------------------------------------------------------------------
+copernicus_api:
+  base_url: "https://catalogue.dataspace.copernicus.eu/odata/v1"
+  token_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+  client_id: "cdse-public"
+  # Credentials should ideally be supplied via environment variables:
+  # COPERNICUS_USERNAME, COPERNICUS_PASSWORD, COPERNICUS_REFRESH_TOKEN
+  # You can uncomment and set them here for local testing, but do not commit secrets.
+  # username: null
+  # password: null
+  # refresh_token: null
+  
+  # Dataset identifier filter.
+  dataset_identifier: "COP-DEM_GLO-30"
+
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging:
+  # Logging level. Options: "DEBUG", "INFO", "WARNING", "ERROR"
+  level: "INFO"
+  # File to write logs to.
+  file: "visibility.log"

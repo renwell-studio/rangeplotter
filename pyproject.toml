@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rangeplotter"
+version = "0.1.0"
+description = "Radar line-of-sight terrain visibility utility"
+authors = [{name="Your Name"}]
+readme = "README.md"
+license = {text = "UNLICENSED"}
+requires-python = ">=3.11"
+keywords = ["radar", "line-of-sight", "terrain", "geospatial"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+dependencies = [
+    "typer[all]>=0.12.0",
+    "pydantic>=2.6.0",
+    "shapely>=2.0.4",
+    "pyproj>=3.6.0",
+    "rasterio>=1.3.9",
+    "rich>=13.7.0",
+    "requests>=2.32.0",
+    "numpy>=1.26.0",
+    "fastkml>=0.12",
+    "simplekml>=1.3.6",
+    "geographiclib>=2.0",
+    "python-dotenv>=1.0.0",
+    "psutil>=5.9.0",
+    "PyYAML>=6.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rangeplotter*"]
+
+[tool.typer]
+# future typer-specific config
+
+[toolpytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
