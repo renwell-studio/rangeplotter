@@ -5,7 +5,7 @@ from rich import print, progress
 from pathlib import Path
 from typing import Optional, List
 from rangeplotter.config.settings import Settings
-from rangeplotter.io.kml import parse_radars
+from rangeplotter.io.kml import parse_radars, extract_kml_styles
 from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.auth.cdse import CdseAuth
@@ -137,7 +137,7 @@ def debug_auth_dem(
     typer.echo("Access token acquired (not shown). Querying DEM...")
     dem_cache = Path(settings.cache_dir) / "dem_debug"
     dem_client = DemClient(base_url=settings.copernicus_api.base_url, auth=auth, cache_dir=dem_cache)
-    from rangeplotter.geo.earth import mutual_horizon_distance
+    from visibility.geo.earth import mutual_horizon_distance
     horizon = mutual_horizon_distance(5.0, max(settings.effective_altitudes), r.latitude, settings.atmospheric_k_factor)
     bbox = approximate_bounding_box(r.longitude, r.latitude, horizon * 0.1)  # smaller for test
     typer.echo(f"Requesting tiles for bbox={bbox}")
@@ -158,6 +158,8 @@ def horizon(
     and atmospheric refraction (k-factor), ignoring terrain obstructions.
     """
     start_time = time.time()
+    import rangeplotter
+    print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
     settings = Settings.from_file(config)
     if output_dir:
         settings.output_dir = str(output_dir)
@@ -213,7 +215,7 @@ def horizon(
     # Now that we have ground elevations, we can calculate the true horizon distance.
     if verbose >= 1:
         print("\n[bold blue]Verifying DEM Coverage...[/bold blue]")
-    max_target_alt = max(settings.effective_altitudes)
+    max_target_alt = max(altitudes)
     from rangeplotter.geo.earth import mutual_horizon_distance
     
     for r in radars:
@@ -347,13 +349,15 @@ def viewshed(
         dem_client.ensure_tiles(bbox_full)
 
     from rangeplotter.los.viewshed import compute_viewshed
-    from rangeplotter.io.export import export_viewshed_kml
+    from rangeplotter.io.export import export_combined_kml
+    from rangeplotter.io.kml import extract_kml_styles
     
     output_dir = Path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    total_tasks = len(radars) * len(settings.effective_altitudes) * 100
-    
+    # Map populated radars by location for easy lookup
+    radar_map = {(r.longitude, r.latitude): r for r in radars}
+
     # Check system memory before starting
     mem = psutil.virtual_memory()
     max_ram_percent = settings.resources.max_ram_percent
@@ -367,80 +371,75 @@ def viewshed(
         progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         progress.TimeRemainingColumn(),
     ) as prog:
-        overall_task = prog.add_task("Computing viewshed...", total=total_tasks)
+        # Estimate total steps (files * radars * altitudes)
+        total_steps = len(radars) * len(altitudes) * 100
+        overall_task = prog.add_task("Computing viewsheds...", total=total_steps)
         
-        for r_idx, sensor in enumerate(radars):
-            prog.update(overall_task, description=f"Processing {sensor.name}...")
+        current_step = 0
+        
+        for kml_file in kml_files:
+            file_radars_raw = parse_radars(str(kml_file), settings.radome_height_m_agl)
+            file_styles = extract_kml_styles(str(kml_file))
+            file_radars_data = []
             
-            for alt_idx, alt in enumerate(settings.effective_altitudes):
-                prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
+            for r_raw in file_radars_raw:
+                # Find the populated radar object (with elevation data)
+                sensor = radar_map.get((r_raw.longitude, r_raw.latitude))
+                if not sensor:
+                    print(f"[red]Could not find sensor for {r_raw.name} at {r_raw.longitude}, {r_raw.latitude}[/red]")
+                    # Debug keys
+                    # print(f"Keys: {list(radar_map.keys())}")
+                    continue
                 
-                # Create a transient task for the calculation details
-                calc_task = prog.add_task("  Initializing...", total=100)
-                
-                # Base completion for previous tasks
-                base_completed = (r_idx * len(settings.effective_altitudes) + alt_idx) * 100
-                
-                def _update_progress(step: str, pct: float):
-                    # Ensure pct is within 0-100
-                    pct = max(0.0, min(100.0, pct))
-                    prog.update(calc_task, description=f"  {step}...", completed=pct)
+                viewsheds = {}
+                for alt in altitudes:
+                    prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
+                    calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
                     
-                    # Map sub-steps to overall progress (0-100 for this task)
-                    # Heuristic weights:
-                    # - Download/Reproject: 0-10%
-                    # - LOS: 10-70% (60% weight)
-                    # - Mask: 70-90% (20% weight)
-                    # - Vectorize/Transform: 90-100%
-                    
-                    task_progress = 0.0
-                    if step == "Downloading DEM":
-                        task_progress = 0.0
-                    elif step == "Reprojecting DEM":
-                        task_progress = 5.0
-                    elif step == "Computing LOS":
-                        task_progress = 10.0 + (pct * 0.6)
-                    elif step == "Generating Mask":
-                        task_progress = 70.0 + (pct * 0.2)
-                    elif step == "Vectorizing":
-                        task_progress = 90.0
-                    elif step == "Transforming to WGS84":
-                        task_progress = 95.0
+                    def _update_progress(step: str, pct: float):
+                        pct = max(0.0, min(100.0, pct))
+                        prog.update(calc_task, description=f"  {step}...", completed=pct)
                         
-                    prog.update(overall_task, completed=base_completed + task_progress)
+                        task_progress = 0.0
+                        if step == "Initializing": task_progress = 5.0
+                        elif step == "Computing LOS": task_progress = 10.0 + (pct * 0.6)
+                        elif step == "Generating Mask": task_progress = 70.0 + (pct * 0.2)
+                        elif step == "Vectorizing": task_progress = 90.0
+                        elif step == "Transforming to WGS84": task_progress = 95.0
+                        
+                        prog.update(overall_task, completed=current_step + task_progress)
+
+                    try:
+                        if verbose >= 2:
+                            log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
+                        
+                        cfg_dict = settings.model_dump()
+                        poly = compute_viewshed(sensor, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
+                        viewsheds[alt] = poly
+                        
+                        if verbose >= 2:
+                            log_memory_usage(log, f"After {sensor.name} @ {alt}m")
+                            
+                    except Exception as e:
+                        log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
+                        prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
+                    finally:
+                        prog.remove_task(calc_task)
+                        current_step += 100
+                        prog.update(overall_task, completed=current_step)
                 
-                try:
-                    if verbose >= 2:
-                        log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
-                    # Use model_dump (Pydantic V2)
-                    cfg_dict = settings.model_dump()
-                    poly = compute_viewshed(sensor, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
-                    if verbose >= 2:
-                        log_memory_usage(log, f"After {sensor.name} @ {alt}m")
-                    
-                    # Construct filename: {site_name}_{altitude}m_viewshed.kml
-                    # Sanitize name for filename
-                    safe_name = "".join(c for c in sensor.name if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
-                    out_path = output_dir / f"{safe_name}_{alt}m_viewshed.kml"
-                    
-                    export_viewshed_kml(
-                        viewshed_polygon=poly,
-                        sensor_location=(sensor.longitude, sensor.latitude),
-                        output_path=out_path,
-                        sensor_name=sensor.name,
-                        altitude=float(alt),
-                        style_config=settings.style.model_dump()
-                    )
-                except Exception as e:
-                    log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
-                    prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
-                    import traceback
-                    traceback.print_exc()
-                finally:
-                    prog.remove_task(calc_task)
-                
-                # Ensure we hit exactly the next 100 mark
-                prog.update(overall_task, completed=base_completed + 100)
+                file_radars_data.append({'radar': sensor, 'viewsheds': viewsheds})
+            
+            # Export combined KML for this file
+            if file_radars_data:
+                out_path = output_dir / kml_file.name
+                export_combined_kml(
+                    output_path=out_path,
+                    radars_data=file_radars_data,
+                    styles=file_styles,
+                    style_config=settings.style.model_dump(),
+                    document_name=kml_file.stem
+                )
             
     print("[green]Viewshed computation complete.[/green]")
     
@@ -452,6 +451,7 @@ def viewshed(
 
 @app.command("detection-range")
 def detection_range(
+    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
     input_path: Path = typer.Option(..., "--input", "-i", help="Path to viewshed KML file or directory"),
     max_range_km: float = typer.Option(..., "--range", "-r", help="Maximum detection range in kilometers"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level")
@@ -461,16 +461,20 @@ def detection_range(
     """
     from rangeplotter.io.kml import parse_viewshed_kml, add_polygon_to_kml
     from rangeplotter.geo.geometry import create_geodesic_circle
+    from shapely.geometry import Polygon, MultiPolygon
+    
+    # Load settings to ensure we respect style config if needed (though we mostly reuse existing styles)
+    settings = Settings.from_file(config)
     
     # Resolve inputs
     files = []
     if input_path.is_dir():
-        files = list(input_path.glob("*_viewshed.kml"))
+        files = list(input_path.glob("*.kml"))
     else:
         files = [input_path]
         
     if not files:
-        typer.echo("[red]No viewshed KML files found.[/red]")
+        typer.echo("[red]No KML files found.[/red]")
         raise typer.Exit(code=1)
         
     with progress.Progress(
@@ -484,29 +488,39 @@ def detection_range(
         for f in files:
             prog.update(task, description=f"Processing {f.name}...")
             try:
-                # Parse
-                sensor_loc, viewshed_poly = parse_viewshed_kml(str(f))
+                # Parse - now returns a list of dicts
+                results = parse_viewshed_kml(str(f))
                 
-                if not sensor_loc or not viewshed_poly:
+                if not results:
                     if verbose >= 1:
-                        print(f"[yellow]Skipping {f.name}: Could not find sensor location or viewshed polygon.[/yellow]")
+                        print(f"[yellow]Skipping {f.name}: Could not find any sensor locations or viewshed polygons.[/yellow]")
                     prog.advance(task)
                     continue
                 
-                # Create range circle
-                circle = create_geodesic_circle(sensor_loc[0], sensor_loc[1], max_range_km)
-                
-                # Intersect
-                clipped_poly = viewshed_poly.intersection(circle)
-                
-                if clipped_poly.is_empty:
-                    if verbose >= 1:
-                        print(f"[yellow]Warning: {f.name} resulted in empty polygon after clipping.[/yellow]")
-                
-                # Append to existing file
-                name = f"Viewshed @ {max_range_km}km Limit"
-                # Reuse the existing polyStyle if available
-                add_polygon_to_kml(str(f), clipped_poly, name, style_url="#polyStyle")
+                for res in results:
+                    sensor_loc = res['sensor']
+                    viewshed_poly = res['viewshed']
+                    folder_name = res['folder_name']
+                    
+                    if not sensor_loc or not viewshed_poly:
+                        continue
+
+                    # Create range circle
+                    circle = create_geodesic_circle(sensor_loc[0], sensor_loc[1], max_range_km)
+                    
+                    # Intersect
+                    clipped_poly = viewshed_poly.intersection(circle)
+                    
+                    if clipped_poly.is_empty:
+                        if verbose >= 1:
+                            print(f"[yellow]Warning: {f.name} ({folder_name}) resulted in empty polygon after clipping.[/yellow]")
+                        continue
+                    
+                    # Append to existing file
+                    name = f"{max_range_km}km detection zone"
+                    # Use #defaultPolyStyle which is what export_combined_kml uses
+                    if isinstance(clipped_poly, (Polygon, MultiPolygon)):
+                        add_polygon_to_kml(str(f), clipped_poly, name, style_url="#defaultPolyStyle", folder_name=folder_name)
                 
             except Exception as e:
                 print(f"[red]Error processing {f.name}: {e}[/red]")

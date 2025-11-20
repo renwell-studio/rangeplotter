@@ -14,6 +14,17 @@ def _coords_to_kml_str(coords, altitude: float = 0.0) -> str:
     """Convert list of (lon, lat) or (lon, lat, z) to KML coordinate string."""
     return " ".join(f"{c[0]},{c[1]},{altitude}" for c in coords)
 
+def to_kml_color(hex_col: str, opacity_float: float) -> str:
+    """Convert hex #RRGGBB to KML aabbggrr."""
+    hex_col = hex_col.lstrip('#')
+    if len(hex_col) != 6:
+        return "ff0000ff" # Default red
+    rr = hex_col[0:2]
+    gg = hex_col[2:4]
+    bb = hex_col[4:6]
+    aa = f"{int(opacity_float * 255):02x}"
+    return aa + bb + gg + rr
+
 def export_viewshed_kml(
     viewshed_polygon: Union[Polygon, MultiPolygon],
     sensor_location: Tuple[float, float], # lon, lat
@@ -25,17 +36,6 @@ def export_viewshed_kml(
     """
     Export a viewshed to a self-contained KML file with sensor location and polygon.
     """
-    # Helper to convert hex #RRGGBB to KML aabbggrr
-    def to_kml_color(hex_col: str, opacity_float: float) -> str:
-        hex_col = hex_col.lstrip('#')
-        if len(hex_col) != 6:
-            return "ff0000ff" # Default red
-        rr = hex_col[0:2]
-        gg = hex_col[2:4]
-        bb = hex_col[4:6]
-        aa = f"{int(opacity_float * 255):02x}"
-        return aa + bb + gg + rr
-
     line_color = style_config.get("line_color", "#FFA500")
     line_width = style_config.get("line_width", 2)
     fill_color = style_config.get("fill_color", None)
@@ -260,4 +260,125 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(parts))
 
-__all__ = ["export_horizons_kml"]
+def export_combined_kml(
+    output_path: Path,
+    radars_data: List[dict],
+    styles: List[str],
+    style_config: dict,
+    document_name: str = "Viewshed Analysis"
+) -> None:
+    """
+    Export multiple radars and their viewsheds to a single KML file.
+    radars_data: List of dicts {'radar': RadarSite, 'viewsheds': {alt: poly}}
+    """
+    line_color = style_config.get("line_color", "#FFA500")
+    line_width = style_config.get("line_width", 2)
+    fill_color = style_config.get("fill_color", None)
+    fill_opacity = style_config.get("fill_opacity", 0.0)
+
+    line_kml = to_kml_color(line_color, 1.0)
+    
+    fill_val = "0"
+    fill_kml = "00000000"
+    if fill_color and fill_opacity > 0:
+        fill_val = "1"
+        fill_kml = to_kml_color(fill_color, fill_opacity)
+
+    kml_content = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        '  <Document>',
+        f'    <name>{document_name}</name>'
+    ]
+    
+    # Add extracted styles
+    for style_xml in styles:
+        kml_content.append(style_xml)
+        
+    # Add default styles if not present (or always add them with unique IDs)
+    kml_content.extend([
+        '    <Style id="defaultSensorStyle">',
+        '      <IconStyle>',
+        '        <scale>1.0</scale>',
+        '        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>',
+        '      </IconStyle>',
+        '    </Style>',
+        '    <Style id="defaultPolyStyle">',
+        '      <LineStyle>',
+        f'        <color>{line_kml}</color>',
+        f'        <width>{line_width}</width>',
+        '      </LineStyle>',
+        '      <PolyStyle>',
+        f'        <color>{fill_kml}</color>',
+        f'        <fill>{fill_val}</fill>',
+        '      </PolyStyle>',
+        '    </Style>'
+    ])
+    
+    use_folders = len(radars_data) > 1
+    
+    for item in radars_data:
+        radar = item['radar']
+        viewsheds = item['viewsheds']
+        
+        indent = "    "
+        if use_folders:
+            kml_content.append(f'{indent}<Folder>')
+            kml_content.append(f'{indent}  <name>{radar.name}</name>')
+            indent += "  "
+            
+        # Sensor Placemark
+        style_url = radar.style_url if radar.style_url else "#defaultSensorStyle"
+        kml_content.append(f'{indent}<Placemark>')
+        kml_content.append(f'{indent}  <name>{radar.name}</name>')
+        if radar.description:
+             # Wrap description in CDATA to handle HTML content safely
+             kml_content.append(f'{indent}  <description><![CDATA[{radar.description}]]></description>')
+        kml_content.append(f'{indent}  <styleUrl>{style_url}</styleUrl>')
+        kml_content.append(f'{indent}  <Point>')
+        kml_content.append(f'{indent}    <coordinates>{radar.longitude},{radar.latitude},0</coordinates>')
+        kml_content.append(f'{indent}  </Point>')
+        kml_content.append(f'{indent}</Placemark>')
+        
+        # Viewshed Placemarks
+        for alt, poly in viewsheds.items():
+            if poly.is_empty:
+                continue
+                
+            kml_content.append(f'{indent}<Placemark>')
+            kml_content.append(f'{indent}  <name>viewshed ({alt}m target altitude)</name>')
+            kml_content.append(f'{indent}  <styleUrl>#defaultPolyStyle</styleUrl>')
+            kml_content.append(f'{indent}  <MultiGeometry>')
+            
+            polys = []
+            if isinstance(poly, Polygon):
+                polys = [poly]
+            elif isinstance(poly, MultiPolygon):
+                polys = list(poly.geoms)
+                
+            for p in polys:
+                if p.is_empty: continue
+                kml_content.append(f'{indent}    <Polygon>')
+                kml_content.append(f'{indent}      <altitudeMode>absolute</altitudeMode>')
+                kml_content.append(f'{indent}      <outerBoundaryIs><LinearRing><coordinates>')
+                kml_content.append(f'{indent}      {_coords_to_kml_str(p.exterior.coords, float(alt))}')
+                kml_content.append(f'{indent}      </coordinates></LinearRing></outerBoundaryIs>')
+                for interior in p.interiors:
+                    kml_content.append(f'{indent}      <innerBoundaryIs><LinearRing><coordinates>')
+                    kml_content.append(f'{indent}      {_coords_to_kml_str(interior.coords, float(alt))}')
+                    kml_content.append(f'{indent}      </coordinates></LinearRing></innerBoundaryIs>')
+                kml_content.append(f'{indent}    </Polygon>')
+                
+            kml_content.append(f'{indent}  </MultiGeometry>')
+            kml_content.append(f'{indent}</Placemark>')
+            
+        if use_folders:
+            kml_content.append('    </Folder>')
+            
+    kml_content.append('  </Document>')
+    kml_content.append('</kml>')
+    
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(kml_content))
+
+__all__ = ["export_horizons_kml", "export_viewshed_kml", "export_combined_kml"]

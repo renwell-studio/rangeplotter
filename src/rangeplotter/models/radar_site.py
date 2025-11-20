@@ -11,6 +11,8 @@ class RadarSite:
     input_altitude: Optional[float]  # Raw altitude value from KML (may be 0 or None)
     ground_elevation_m_msl: Optional[float] = None  # To be populated after DEM query
     radome_height_agl_m: float = 5.0
+    description: Optional[str] = None
+    style_url: Optional[str] = None
 
     @property
     def radar_height_m_msl(self) -> Optional[float]:

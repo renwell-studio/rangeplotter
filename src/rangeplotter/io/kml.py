@@ -15,6 +15,13 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
     for pm in root.findall(f".//{KML_NS}Placemark"):
         name_el = pm.find(f"{KML_NS}name")
         name = name_el.text.strip() if name_el is not None and name_el.text else "Unnamed"
+        
+        desc_el = pm.find(f"{KML_NS}description")
+        description = desc_el.text.strip() if desc_el is not None and desc_el.text else None
+        
+        style_url_el = pm.find(f"{KML_NS}styleUrl")
+        style_url = style_url_el.text.strip() if style_url_el is not None and style_url_el.text else None
+
         alt_mode_el = pm.find(f"{KML_NS}altitudeMode")
         altitude_mode = alt_mode_el.text.strip() if alt_mode_el is not None and alt_mode_el.text else "clampToGround"
         if altitude_mode not in ALTITUDE_MODES:
@@ -41,83 +48,107 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
             altitude_mode=altitude_mode,
             input_altitude=alt,
             radome_height_agl_m=default_radome_height_m,
+            description=description,
+            style_url=style_url,
         ))
     return radars
 
-def parse_viewshed_kml(kml_path: str) -> Tuple[Optional[Tuple[float, float]], Optional[Union[Polygon, MultiPolygon]]]:
+def parse_viewshed_kml(kml_path: str) -> List[dict]:
     """
-    Parse a viewshed KML file to extract the sensor location and the viewshed polygon.
-    Returns ((lon, lat), geometry).
+    Parse a viewshed KML file to extract sensor locations and viewshed polygons.
+    Returns a list of dicts: {'folder_name': str, 'sensor': (lon, lat), 'viewshed': geometry}
     """
     tree = ET.parse(kml_path)
     root = tree.getroot()
     
-    sensor_loc = None
-    viewshed_poly = None
-    
-    # Find all Placemarks
-    for pm in root.findall(f".//{KML_NS}Placemark"):
-        name = pm.find(f"{KML_NS}name")
-        name_text = name.text if name is not None and name.text else ""
+    results = []
+
+    def extract_from_element(element):
+        sensor_loc = None
+        viewshed_poly = None
         
-        # Check for Point (Sensor Location)
-        point = pm.find(f"{KML_NS}Point")
-        if point is not None:
-            # Heuristic: check name or if we haven't found one yet
-            if "Location" in name_text or sensor_loc is None:
-                coords = point.find(f"{KML_NS}coordinates")
-                if coords is not None and coords.text:
-                    parts = coords.text.strip().split(',')
-                    if len(parts) >= 2:
-                        sensor_loc = (float(parts[0]), float(parts[1]))
-                    
-        # Check for Polygon or MultiGeometry (Viewshed)
-        def extract_polygon(poly_el) -> Optional[Polygon]:
-            outer = poly_el.find(f"{KML_NS}outerBoundaryIs/{KML_NS}LinearRing/{KML_NS}coordinates")
-            if outer is not None and outer.text:
-                coords_str = outer.text.strip()
-                points = []
-                for p in coords_str.split():
-                    parts = p.split(',')
-                    if len(parts) >= 2:
-                        points.append((float(parts[0]), float(parts[1])))
-                
-                if points:
-                    # Handle inner boundaries (holes)
-                    holes = []
-                    for inner in poly_el.findall(f"{KML_NS}innerBoundaryIs/{KML_NS}LinearRing/{KML_NS}coordinates"):
-                        if inner.text:
-                            h_points = []
-                            for p in inner.text.strip().split():
-                                parts = p.split(',')
-                                if len(parts) >= 2:
-                                    h_points.append((float(parts[0]), float(parts[1])))
-                            if h_points:
-                                holes.append(h_points)
-                                
-                    return Polygon(shell=points, holes=holes)
-            return None
-
-        if "Viewshed" in name_text or viewshed_poly is None:
-            poly = pm.find(f"{KML_NS}Polygon")
-            multi = pm.find(f"{KML_NS}MultiGeometry")
+        # Find all Placemarks in this element context
+        for pm in element.findall(f".//{KML_NS}Placemark"):
+            name = pm.find(f"{KML_NS}name")
+            name_text = name.text if name is not None and name.text else ""
             
-            if poly is not None:
-                p = extract_polygon(poly)
-                if p:
-                    viewshed_poly = p
-            elif multi is not None:
-                polys = []
-                for p_el in multi.findall(f"{KML_NS}Polygon"):
-                    p = extract_polygon(p_el)
-                    if p:
-                        polys.append(p)
-                if polys:
-                    viewshed_poly = MultiPolygon(polys)
-                        
-    return sensor_loc, viewshed_poly
+            # Check for Point (Sensor Location)
+            point = pm.find(f"{KML_NS}Point")
+            if point is not None:
+                # Heuristic: check name or if we haven't found one yet
+                if "Location" in name_text or sensor_loc is None:
+                    coords = point.find(f"{KML_NS}coordinates")
+                    if coords is not None and coords.text:
+                        parts = coords.text.strip().split(',')
+                        if len(parts) >= 2:
+                            sensor_loc = (float(parts[0]), float(parts[1]))
+                    
+            # Check for Polygon or MultiGeometry (Viewshed)
+            def extract_polygon(poly_el) -> Optional[Polygon]:
+                outer = poly_el.find(f"{KML_NS}outerBoundaryIs/{KML_NS}LinearRing/{KML_NS}coordinates")
+                if outer is not None and outer.text:
+                    coords_str = outer.text.strip()
+                    points = []
+                    for p in coords_str.split():
+                        parts = p.split(',')
+                        if len(parts) >= 2:
+                            points.append((float(parts[0]), float(parts[1])))
+                    
+                    if points:
+                        # Handle inner boundaries (holes)
+                        holes = []
+                        for inner in poly_el.findall(f"{KML_NS}innerBoundaryIs/{KML_NS}LinearRing/{KML_NS}coordinates"):
+                            if inner.text:
+                                h_points = []
+                                for p in inner.text.strip().split():
+                                    parts = p.split(',')
+                                    if len(parts) >= 2:
+                                        h_points.append((float(parts[0]), float(parts[1])))
+                                if h_points:
+                                    holes.append(h_points)
+                                    
+                        return Polygon(shell=points, holes=holes)
+                return None
 
-def add_polygon_to_kml(kml_path: str, polygon: Union[Polygon, MultiPolygon], name: str, style_url: Optional[str] = None):
+            if "Viewshed" in name_text or viewshed_poly is None:
+                poly = pm.find(f"{KML_NS}Polygon")
+                multi = pm.find(f"{KML_NS}MultiGeometry")
+                
+                if poly is not None:
+                    p = extract_polygon(poly)
+                    if p:
+                        viewshed_poly = p
+                elif multi is not None:
+                    polys = []
+                    for p_el in multi.findall(f"{KML_NS}Polygon"):
+                        p = extract_polygon(p_el)
+                        if p:
+                            polys.append(p)
+                    if polys:
+                        viewshed_poly = MultiPolygon(polys)
+        
+        return sensor_loc, viewshed_poly
+
+    # Strategy: Look for Folders.
+    folders = root.findall(f".//{KML_NS}Folder")
+    
+    if folders:
+        for folder in folders:
+            name_el = folder.find(f"{KML_NS}name")
+            folder_name = name_el.text.strip() if name_el is not None and name_el.text else None
+            sensor, viewshed = extract_from_element(folder)
+            if sensor and viewshed:
+                results.append({'folder_name': folder_name, 'sensor': sensor, 'viewshed': viewshed})
+    
+    # If no results from folders, try the whole document (backward compatibility)
+    if not results:
+        sensor, viewshed = extract_from_element(root)
+        if sensor and viewshed:
+             results.append({'folder_name': None, 'sensor': sensor, 'viewshed': viewshed})
+                        
+    return results
+
+def add_polygon_to_kml(kml_path: str, polygon: Union[Polygon, MultiPolygon], name: str, style_url: Optional[str] = None, folder_name: Optional[str] = None):
     """
     Add a polygon to an existing KML file.
     """
@@ -125,16 +156,27 @@ def add_polygon_to_kml(kml_path: str, polygon: Union[Polygon, MultiPolygon], nam
     tree = ET.parse(kml_path)
     root = tree.getroot()
     
-    # Find a Folder to add to, or Document
-    folder = root.find(f".//{KML_NS}Folder")
-    if folder is None:
-        folder = root.find(f".//{KML_NS}Document")
+    target_folder = None
     
-    if folder is None:
+    if folder_name:
+        # Find specific folder
+        for f in root.findall(f".//{KML_NS}Folder"):
+            fn = f.find(f"{KML_NS}name")
+            if fn is not None and fn.text and fn.text.strip() == folder_name:
+                target_folder = f
+                break
+    
+    if target_folder is None:
+        # Find a Folder to add to, or Document
+        target_folder = root.find(f".//{KML_NS}Folder")
+        if target_folder is None:
+            target_folder = root.find(f".//{KML_NS}Document")
+    
+    if target_folder is None:
         # Should not happen for valid KML
-        folder = root
+        target_folder = root
         
-    placemark = ET.SubElement(folder, f"{KML_NS}Placemark")
+    placemark = ET.SubElement(target_folder, f"{KML_NS}Placemark")
     name_el = ET.SubElement(placemark, f"{KML_NS}name")
     name_el.text = name
     
@@ -171,4 +213,21 @@ def add_polygon_to_kml(kml_path: str, polygon: Union[Polygon, MultiPolygon], nam
             
     tree.write(kml_path, encoding="UTF-8", xml_declaration=True)
 
-__all__ = ["parse_radars", "parse_viewshed_kml", "add_polygon_to_kml"]
+def extract_kml_styles(kml_path: str) -> List[str]:
+    """
+    Extract all Style and StyleMap elements from a KML file as XML strings.
+    """
+    ET.register_namespace("", "http://www.opengis.net/kml/2.2")
+    tree = ET.parse(kml_path)
+    root = tree.getroot()
+    
+    styles = []
+    # Find all Style and StyleMap elements anywhere in the document
+    for elem in root.findall(f".//{KML_NS}Style"):
+        styles.append(ET.tostring(elem, encoding="unicode"))
+    for elem in root.findall(f".//{KML_NS}StyleMap"):
+        styles.append(ET.tostring(elem, encoding="unicode"))
+        
+    return styles
+
+__all__ = ["parse_radars", "parse_viewshed_kml", "add_polygon_to_kml", "extract_kml_styles"]

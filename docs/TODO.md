@@ -24,7 +24,13 @@
 - [ ] make -h work as well as --help
 - [ ] make output kml inherit polygon style from input
 - [ ] make detection-range function save output correctly
-- [ ] fix double nexted folders in imported kml
+- [x] fix double nested folders in imported kml
+- [x] fix output file/folder naming:
+ - top level - site(s) name - same name as input kml
+ - next level - individual sites and union folder (this level only exists if necessary)
+ - next level - max sensor ranges
+ - next level - target altitudes
+- [ ] change target altitudes to agl throughout??
 - [ ] general review for deprecated/redundant code and commands
 
 # Extended feature set:
