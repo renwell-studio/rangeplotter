@@ -11,3 +11,7 @@ data_cache/
 *.log
 .idea/
 .vscode/
+
+# Ignore input files, but keep the sample
+input/*
+!input/radars_sample.kml

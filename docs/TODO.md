@@ -8,7 +8,7 @@
 - [x] remove the deprecated warning
 - [ ] include basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
 - [ ] have a way to do just one/some sites from an input list of many
-- [ ] specify which LOS ranges to do
+- [ ] CLI flag to specify which LOS ranges to do
 - [x] output verbosity
 - [x] improve meaningfulness of progress statements to command line
  - [ ] have a line confirming that all required DEM tiles are available
@@ -21,7 +21,11 @@
 - [ ] get multiple site input and polygon unions working
 - [x] get output file structure working inside the kml file so I can import the out structure
 - [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
-
+- [ ] make -h work as well as --help
+- [ ] make output kml inherit polygon style from input
+- [ ] make detection-range function save output correctly
+- [ ] fix double nexted folders in imported kml
+- [ ] general review for deprecated/redundant code and commands
 
 # Extended feature set:
 - [ ] add functionality for true radar visibility (taking radar cross section, frequency, etc as inputs).
@@ -33,7 +37,7 @@
 - [ ] think about a way to represent detection probability (isosurfaces)?
 
 # For packaging:
-- [ ] use git properly
+- [x] use git properly
 - [ ] make sure it behaves well on any CPU
 - [ ] add GPU processing?
 - [ ] package utility for download/installation as a snap(?)

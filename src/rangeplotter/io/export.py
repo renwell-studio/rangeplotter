@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 import math
 from pathlib import Path
 from pyproj import Geod
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon, Point
 
 KML_HEADER = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>"""
 KML_FOOTER = "</Document></kml>"
@@ -13,6 +13,111 @@ GEOD = Geod(ellps="WGS84")
 def _coords_to_kml_str(coords, altitude: float = 0.0) -> str:
     """Convert list of (lon, lat) or (lon, lat, z) to KML coordinate string."""
     return " ".join(f"{c[0]},{c[1]},{altitude}" for c in coords)
+
+def export_viewshed_kml(
+    viewshed_polygon: Union[Polygon, MultiPolygon],
+    sensor_location: Tuple[float, float], # lon, lat
+    output_path: Path,
+    sensor_name: str,
+    altitude: float,
+    style_config: dict
+) -> None:
+    """
+    Export a viewshed to a self-contained KML file with sensor location and polygon.
+    """
+    # Helper to convert hex #RRGGBB to KML aabbggrr
+    def to_kml_color(hex_col: str, opacity_float: float) -> str:
+        hex_col = hex_col.lstrip('#')
+        if len(hex_col) != 6:
+            return "ff0000ff" # Default red
+        rr = hex_col[0:2]
+        gg = hex_col[2:4]
+        bb = hex_col[4:6]
+        aa = f"{int(opacity_float * 255):02x}"
+        return aa + bb + gg + rr
+
+    line_color = style_config.get("line_color", "#FFA500")
+    line_width = style_config.get("line_width", 2)
+    fill_color = style_config.get("fill_color", None)
+    fill_opacity = style_config.get("fill_opacity", 0.0)
+
+    line_kml = to_kml_color(line_color, 1.0)
+    
+    fill_val = "0"
+    fill_kml = "00000000"
+    if fill_color and fill_opacity > 0:
+        fill_val = "1"
+        fill_kml = to_kml_color(fill_color, fill_opacity)
+
+    kml_content = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        '  <Document>',
+        f'    <name>{sensor_name} Viewshed @ {altitude}m</name>',
+        '    <Style id="sensorStyle">',
+        '      <IconStyle>',
+        '        <scale>1.0</scale>',
+        '        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>',
+        '      </IconStyle>',
+        '    </Style>',
+        '    <Style id="polyStyle">',
+        '      <LineStyle>',
+        f'        <color>{line_kml}</color>',
+        f'        <width>{line_width}</width>',
+        '      </LineStyle>',
+        '      <PolyStyle>',
+        f'        <color>{fill_kml}</color>',
+        f'        <fill>{fill_val}</fill>',
+        '      </PolyStyle>',
+        '    </Style>',
+        '    <Folder>',
+        f'      <name>{sensor_name} Data</name>',
+        '      <Placemark>',
+        f'        <name>{sensor_name} Location</name>',
+        '        <styleUrl>#sensorStyle</styleUrl>',
+        '        <Point>',
+        f'          <coordinates>{sensor_location[0]},{sensor_location[1]},0</coordinates>',
+        '        </Point>',
+        '      </Placemark>',
+        '      <Placemark>',
+        f'        <name>Viewshed @ {altitude}m</name>',
+        '        <styleUrl>#polyStyle</styleUrl>',
+        '        <MultiGeometry>'
+    ]
+
+    polys = []
+    if isinstance(viewshed_polygon, Polygon):
+        polys = [viewshed_polygon]
+    elif isinstance(viewshed_polygon, MultiPolygon):
+        polys = list(viewshed_polygon.geoms)
+        
+    for poly in polys:
+        if poly.is_empty:
+            continue
+            
+        # Exterior
+        kml_content.append("        <Polygon>")
+        kml_content.append("          <altitudeMode>absolute</altitudeMode>")
+        kml_content.append("          <outerBoundaryIs><LinearRing><coordinates>")
+        kml_content.append(_coords_to_kml_str(poly.exterior.coords, altitude))
+        kml_content.append("          </coordinates></LinearRing></outerBoundaryIs>")
+        
+        # Interiors (holes)
+        for interior in poly.interiors:
+            kml_content.append("          <innerBoundaryIs><LinearRing><coordinates>")
+            kml_content.append(_coords_to_kml_str(interior.coords, altitude))
+            kml_content.append("          </coordinates></LinearRing></innerBoundaryIs>")
+            
+        kml_content.append("        </Polygon>")
+
+    kml_content.append('        </MultiGeometry>')
+    kml_content.append('      </Placemark>')
+    kml_content.append('    </Folder>')
+    kml_content.append('  </Document>')
+    kml_content.append('</kml>')
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(kml_content))
 
 def export_kml_polygon(
     geometry: Union[Polygon, MultiPolygon],

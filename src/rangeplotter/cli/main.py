@@ -213,7 +213,7 @@ def horizon(
     # Now that we have ground elevations, we can calculate the true horizon distance.
     if verbose >= 1:
         print("\n[bold blue]Verifying DEM Coverage...[/bold blue]")
-    max_target_alt = max(altitudes)
+    max_target_alt = max(settings.effective_altitudes)
     from rangeplotter.geo.earth import mutual_horizon_distance
     
     for r in radars:
@@ -347,7 +347,7 @@ def viewshed(
         dem_client.ensure_tiles(bbox_full)
 
     from rangeplotter.los.viewshed import compute_viewshed
-    from rangeplotter.io.export import export_kml_polygon
+    from rangeplotter.io.export import export_viewshed_kml
     
     output_dir = Path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -369,11 +369,11 @@ def viewshed(
     ) as prog:
         overall_task = prog.add_task("Computing viewshed...", total=total_tasks)
         
-        for r_idx, r in enumerate(radars):
-            prog.update(overall_task, description=f"Processing {r.name}...")
+        for r_idx, sensor in enumerate(radars):
+            prog.update(overall_task, description=f"Processing {sensor.name}...")
             
             for alt_idx, alt in enumerate(settings.effective_altitudes):
-                prog.update(overall_task, description=f"Computing viewshed for {r.name} @ {alt}m")
+                prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
                 
                 # Create a transient task for the calculation details
                 calc_task = prog.add_task("  Initializing...", total=100)
@@ -411,31 +411,29 @@ def viewshed(
                 
                 try:
                     if verbose >= 2:
-                        log_memory_usage(log, f"Before {r.name} @ {alt}m")
+                        log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
                     # Use model_dump (Pydantic V2)
                     cfg_dict = settings.model_dump()
-                    poly = compute_viewshed(r, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
+                    poly = compute_viewshed(sensor, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
                     if verbose >= 2:
-                        log_memory_usage(log, f"After {r.name} @ {alt}m")
+                        log_memory_usage(log, f"After {sensor.name} @ {alt}m")
                     
                     # Construct filename: {site_name}_{altitude}m_viewshed.kml
                     # Sanitize name for filename
-                    safe_name = "".join(c for c in r.name if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
+                    safe_name = "".join(c for c in sensor.name if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
                     out_path = output_dir / f"{safe_name}_{alt}m_viewshed.kml"
                     
-                    export_kml_polygon(
-                        poly, 
-                        out_path, 
-                        name=f"Viewshed {r.name} @ {alt}m", 
-                        color=settings.style.line_color,
-                        width=settings.style.line_width,
+                    export_viewshed_kml(
+                        viewshed_polygon=poly,
+                        sensor_location=(sensor.longitude, sensor.latitude),
+                        output_path=out_path,
+                        sensor_name=sensor.name,
                         altitude=float(alt),
-                        fill_color=settings.style.fill_color,
-                        fill_opacity=settings.style.fill_opacity
+                        style_config=settings.style.model_dump()
                     )
                 except Exception as e:
-                    log.error(f"Failed to compute viewshed for {r.name} @ {alt}m: {e}", exc_info=True)
-                    prog.console.print(f"[red]    Failed to compute viewshed for {r.name} @ {alt}m: {e}[/red]")
+                    log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
+                    prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
                     import traceback
                     traceback.print_exc()
                 finally:
@@ -451,6 +449,74 @@ def viewshed(
     print(f"[bold]Total execution time: {total_time:.1f}s[/bold]")
     print(f"  - DEM Download time: {dem_client.total_download_time:.1f}s")
     print(f"  - Processing time: {total_time - dem_client.total_download_time:.1f}s")
+
+@app.command("detection-range")
+def detection_range(
+    input_path: Path = typer.Option(..., "--input", "-i", help="Path to viewshed KML file or directory"),
+    max_range_km: float = typer.Option(..., "--range", "-r", help="Maximum detection range in kilometers"),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level")
+):
+    """
+    Clip existing viewshed KMLs to a maximum detection range and append the result to the same file.
+    """
+    from rangeplotter.io.kml import parse_viewshed_kml, add_polygon_to_kml
+    from rangeplotter.geo.geometry import create_geodesic_circle
+    
+    # Resolve inputs
+    files = []
+    if input_path.is_dir():
+        files = list(input_path.glob("*_viewshed.kml"))
+    else:
+        files = [input_path]
+        
+    if not files:
+        typer.echo("[red]No viewshed KML files found.[/red]")
+        raise typer.Exit(code=1)
+        
+    with progress.Progress(
+        progress.SpinnerColumn(),
+        progress.TextColumn("[progress.description]{task.description}"),
+        progress.BarColumn(),
+        progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+    ) as prog:
+        task = prog.add_task("Clipping viewsheds...", total=len(files))
+        
+        for f in files:
+            prog.update(task, description=f"Processing {f.name}...")
+            try:
+                # Parse
+                sensor_loc, viewshed_poly = parse_viewshed_kml(str(f))
+                
+                if not sensor_loc or not viewshed_poly:
+                    if verbose >= 1:
+                        print(f"[yellow]Skipping {f.name}: Could not find sensor location or viewshed polygon.[/yellow]")
+                    prog.advance(task)
+                    continue
+                
+                # Create range circle
+                circle = create_geodesic_circle(sensor_loc[0], sensor_loc[1], max_range_km)
+                
+                # Intersect
+                clipped_poly = viewshed_poly.intersection(circle)
+                
+                if clipped_poly.is_empty:
+                    if verbose >= 1:
+                        print(f"[yellow]Warning: {f.name} resulted in empty polygon after clipping.[/yellow]")
+                
+                # Append to existing file
+                name = f"Viewshed @ {max_range_km}km Limit"
+                # Reuse the existing polyStyle if available
+                add_polygon_to_kml(str(f), clipped_poly, name, style_url="#polyStyle")
+                
+            except Exception as e:
+                print(f"[red]Error processing {f.name}: {e}[/red]")
+                if verbose >= 2:
+                    import traceback
+                    traceback.print_exc()
+            
+            prog.advance(task)
+            
+    print(f"[green]Processing complete. Files updated in place.[/green]")
 
 if __name__ == "__main__":
     app()
