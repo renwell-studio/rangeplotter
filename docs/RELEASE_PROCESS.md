@@ -123,5 +123,9 @@ We distribute the application as a portable ZIP archive containing the binary, c
     ```
 
 ### 6. Publish
-*   Upload `release/rangeplotter_${VERSION}_linux.zip` to the GitHub Release.
+Use the GitHub CLI to create the release and upload the archive:
+```bash
+gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --title "${VERSION}" --generate-notes
+```
+Alternatively, upload `release/rangeplotter_${VERSION}_linux.zip` manually via the GitHub website.
 
