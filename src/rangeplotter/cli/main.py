@@ -4,7 +4,7 @@ import psutil
 from rich import print, progress
 from pathlib import Path
 from typing import Optional, List
-from rangeplotter.config.settings import Settings
+from rangeplotter.config.settings import Settings, load_settings
 from rangeplotter.io.kml import parse_radars, parse_viewshed_kml
 from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
@@ -47,23 +47,18 @@ def main(
     pass
 
 # Load defaults from config if available
-config_path = Path("config/config.yaml")
-default_input_dir = Path("working_files/input")
-default_viewshed_dir = Path("working_files/viewshed")
-default_horizon_dir = Path("working_files/horizon")
-default_detection_dir = Path("working_files/detection_range")
-
-if config_path.exists():
-    try:
-        with open(config_path) as f:
-            c = yaml.safe_load(f)
-            if c:
-                default_input_dir = Path(c.get("input_dir", default_input_dir))
-                default_viewshed_dir = Path(c.get("output_viewshed_dir", default_viewshed_dir))
-                default_horizon_dir = Path(c.get("output_horizon_dir", default_horizon_dir))
-                default_detection_dir = Path(c.get("output_detection_dir", default_detection_dir))
-    except Exception:
-        pass
+try:
+    _settings = load_settings()
+    default_input_dir = _settings.resolve_path(_settings.input_dir)
+    default_viewshed_dir = _settings.resolve_path(_settings.output_viewshed_dir)
+    default_horizon_dir = _settings.resolve_path(_settings.output_horizon_dir)
+    default_detection_dir = _settings.resolve_path(_settings.output_detection_dir)
+except Exception:
+    # Fallback defaults if config is missing/broken (e.g. first run or bad path)
+    default_input_dir = Path("working_files/input")
+    default_viewshed_dir = Path("working_files/viewshed")
+    default_horizon_dir = Path("working_files/horizon")
+    default_detection_dir = Path("working_files/detection_range")
 
 def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
     """Resolve input path to a list of KML files."""
@@ -197,7 +192,7 @@ def debug_auth_dem(
 
 @app.command()
 def horizon(
-    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
+    config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
     output_dir: Optional[Path] = typer.Option(default_horizon_dir, "--output", "-o", help="Override output directory"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
@@ -211,7 +206,10 @@ def horizon(
     start_time = time.time()
     import rangeplotter
     # print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
-    settings = Settings.from_file(config)
+    if config:
+        settings = Settings.from_file(config)
+    else:
+        settings = load_settings()
     # if output_dir:
     #     settings.output_dir = str(output_dir)
         
@@ -324,7 +322,7 @@ def horizon(
 
 @app.command()
 def viewshed(
-    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
+    config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
@@ -345,7 +343,10 @@ def viewshed(
     Outputs are saved as individual KML files per site and target altitude.
     """
     start_time = time.time()
-    settings = Settings.from_file(config)
+    if config:
+        settings = Settings.from_file(config)
+    else:
+        settings = load_settings()
     
     # Override altitudes if provided via CLI
     if altitudes_cli:
@@ -632,7 +633,7 @@ def viewshed(
 
 @app.command()
 def detection_range(
-    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
+    config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_files: Optional[List[str]] = typer.Option(None, "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
     extra_files: Optional[List[str]] = typer.Argument(None, help="Additional input files (supports wildcards)"),
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
@@ -642,7 +643,10 @@ def detection_range(
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
-    settings = Settings.from_file(config)
+    if config:
+        settings = Settings.from_file(config)
+    else:
+        settings = load_settings()
 
     # Combine inputs
     all_inputs = []

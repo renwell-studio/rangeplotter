@@ -23,3 +23,7 @@ working_files/input/*
 
 # Private docs
 docs/TODO.md
+
+# Release artifacts
+release/
+*.zip

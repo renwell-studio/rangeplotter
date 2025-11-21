@@ -3,19 +3,19 @@
 # -----------------------------------------------------------------------------
 
 # Default input directory for KML files containing sensor locations.
-input_dir: "working_files/input"
+input_dir: "../working_files/input"
 
 # Default output directory for viewshed results.
-output_viewshed_dir: "working_files/viewshed"
+output_viewshed_dir: "../working_files/viewshed"
 
 # Default output directory for horizon results.
-output_horizon_dir: "working_files/horizon"
+output_horizon_dir: "../working_files/horizon"
 
 # Default output directory for detection-range results.
-output_detection_dir: "working_files/detection_range"
+output_detection_dir: "../working_files/detection_range"
 
 # Directory for caching downloaded DEM tiles and intermediate data.
-cache_dir: "data_cache"
+cache_dir: "../data_cache"
 
 # 'viewshed' command: viewsheds will be calculated for each of these altitudes.
 # List of target altitudes in meters above Mean Sea Level (MSL).

@@ -28,15 +28,26 @@ RangePlotter is built on a robust open-source geospatial stack:
 
 ### Option 1: Standalone Binary (Recommended for Linux Users)
 No Python environment required.
-1.  **Download** the latest release from the [GitHub Releases page](https://github.com/renwell-studio/rangeplotter/releases).
-2.  **Make executable**:
+
+1.  **Download** the latest release archive (`rangeplotter_vX.Y.Z_linux.zip`) from the [GitHub Releases page](https://github.com/renwell-studio/rangeplotter/releases).
+2.  **Unzip** the archive:
+    ```bash
+    unzip rangeplotter_vX.Y.Z_linux.zip
+    cd rangeplotter_vX.Y.Z_linux
+    ```
+3.  **Make executable**:
     ```bash
     chmod +x rangeplotter
     ```
-3.  **Run**:
+4.  **Run**:
     ```bash
     ./rangeplotter --help
     ```
+
+**Directory Structure**:
+*   `rangeplotter`: The executable.
+*   `config/config.yaml`: **Edit this file** to change settings (output directories, API credentials, etc.).
+*   `working_files/`: Place your input KML files in `working_files/input/`.
 
 ### Option 2: Python Source (For Developers)
 1.  Clone the repository:

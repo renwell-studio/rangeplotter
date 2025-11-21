@@ -52,6 +52,8 @@ class CopernicusAPIConfig(BaseModel):
     refresh_token: Optional[str] = None
     dataset_identifier: Optional[str] = None  # e.g. "COP-DEM_GLO-30" to narrow products
 
+import sys
+
 class Settings(BaseModel):
     input_dir: str = "working_files/input"
     output_viewshed_dir: str = "working_files/viewshed"
@@ -76,6 +78,9 @@ class Settings(BaseModel):
     copernicus_api: CopernicusAPIConfig
     logging: dict = Field(default_factory=lambda: {"level": "INFO"})
     detection_ranges: List[float] = []
+    
+    # Internal field to track where config was loaded from
+    _config_base_path: Optional[Path] = None
 
     @field_validator("altitudes_msl_m")
     @classmethod
@@ -86,11 +91,30 @@ class Settings(BaseModel):
     def effective_altitudes(self) -> List[float]:
         return self.altitudes_msl_m
 
+    def resolve_path(self, path_str: str) -> Path:
+        """Resolve a path relative to the config file location if it's not absolute."""
+        p = Path(path_str)
+        if p.is_absolute():
+            return p
+        
+        if self._config_base_path:
+            return self._config_base_path / p
+        
+        return Path.cwd() / p
+
     def load_env_credentials(self):
         # Load .env first if present
-        env_path = Path('.env')
-        if env_path.exists():
-            load_dotenv(env_path)
+        # Try relative to config base path first
+        if self._config_base_path:
+             env_path = self._config_base_path / '.env'
+             if env_path.exists():
+                 load_dotenv(env_path)
+        
+        # Fallback to CWD .env
+        env_path_cwd = Path('.env')
+        if env_path_cwd.exists():
+            load_dotenv(env_path_cwd)
+
         # Public client id override (defaults later if still None)
         cid = os.getenv("COPERNICUS_CLIENT_ID")
         if cid and not self.copernicus_api.client_id:
@@ -111,12 +135,46 @@ class Settings(BaseModel):
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Settings":
+        path = Path(path)
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         settings = cls(**data)
+        
+        # Store the base path of the config file to resolve relative paths later
+        settings._config_base_path = path.parent.absolute()
+        
         settings.load_env_credentials()
         if not settings.copernicus_api.client_id:
             settings.copernicus_api.client_id = "cdse-public"
         return settings
 
-__all__ = ["Settings"]
+def load_settings(config_name: str = "config.yaml") -> Settings:
+    """
+    Load settings by searching for config.yaml in priority order:
+    1. Current Working Directory (./config/config.yaml)
+    2. Executable Directory ({exe_dir}/config/config.yaml) - for portable installs
+    3. Internal Fallback (bundled) - Not implemented yet, assumes file exists in one of the above.
+    """
+    # 1. Check CWD
+    cwd_config = Path.cwd() / "config" / config_name
+    if cwd_config.exists():
+        return Settings.from_file(cwd_config)
+    
+    # 2. Check Executable Directory (useful for PyInstaller / portable zip)
+    # sys.executable points to the python interpreter or the frozen binary
+    exe_dir = Path(sys.executable).parent
+    exe_config = exe_dir / "config" / config_name
+    if exe_config.exists():
+        return Settings.from_file(exe_config)
+        
+    # 3. Fallback: Try just "config.yaml" in CWD (legacy)
+    legacy_config = Path.cwd() / config_name
+    if legacy_config.exists():
+        return Settings.from_file(legacy_config)
+
+    raise FileNotFoundError(
+        f"Could not find {config_name} in {cwd_config} or {exe_config}. "
+        "Please ensure the 'config' folder is present."
+    )
+
+__all__ = ["Settings", "load_settings"]

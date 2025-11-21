@@ -90,6 +90,38 @@ We use **PyInstaller** to build the standalone binary. Do not use `python -m bui
     ./dist/rangeplotter --version
     ```
 
-### 5. Distribution
-*   The binary in `dist/rangeplotter` is the release artifact.
-*   (Optional) Zip or package this binary for distribution if needed.
+### 5. Create Release Archive
+We distribute the application as a portable ZIP archive containing the binary, configuration, and necessary folders.
+
+1.  **Create Directory Structure**:
+    ```bash
+    VERSION="vX.Y.Z"
+    mkdir -p release/rangeplotter_${VERSION}_linux/config
+    mkdir -p release/rangeplotter_${VERSION}_linux/working_files/input
+    ```
+
+2.  **Copy Files**:
+    ```bash
+    # Binary
+    cp dist/rangeplotter release/rangeplotter_${VERSION}_linux/
+    
+    # Config (Default)
+    cp config/config.yaml release/rangeplotter_${VERSION}_linux/config/
+    
+    # Documentation
+    cp README.md LICENSE release/rangeplotter_${VERSION}_linux/
+    
+    # Sample Data (Optional)
+    cp working_files/input/radars_sample.kml release/rangeplotter_${VERSION}_linux/working_files/input/
+    ```
+
+3.  **Create Zip**:
+    ```bash
+    cd release
+    zip -r rangeplotter_${VERSION}_linux.zip rangeplotter_${VERSION}_linux/
+    cd ..
+    ```
+
+### 6. Publish
+*   Upload `release/rangeplotter_${VERSION}_linux.zip` to the GitHub Release.
+

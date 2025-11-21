@@ -110,6 +110,53 @@ This approach bundles the Python interpreter, application code, and all dependen
     *   Once the binary build is stable, consider wrapping it in a `snap` for the Canonical Store.
     *   Create `snap/snapcraft.yaml`.
 
+### Feature: Portable Archive Release
+**Goal**: Repackage the application so that users can easily access and modify configuration files and input data without needing to rebuild the binary. The current single-file binary hides `config.yaml` and `working_files`, making it difficult for end-users to configure the tool.
+
+**Implementation Plan**:
+
+1.  **Configuration Loading Logic (`src/rangeplotter/config/settings.py`)**:
+    *   Modify the `load_settings` (or equivalent) function to search for `config.yaml` in the following priority order:
+        1.  **Current Working Directory**: `./config/config.yaml` (Priority 1 - User overrides).
+        2.  **Executable Directory**: `{exe_dir}/config/config.yaml` (Priority 2 - Portable install).
+        3.  **Internal Fallback**: The bundled default config (Priority 3 - Safety net).
+    *   Ensure that default paths for `working_files`, `cache_dir`, etc., in the config are resolved relative to the *location of the config file* or the *executable*, rather than hardcoded absolute paths or internal temp directories.
+
+2.  **Release Artifact Structure**:
+    *   Define the standard release format as a ZIP archive containing:
+        ```text
+        rangeplotter_vX.Y.Z/
+        ├── rangeplotter          (The executable binary)
+        ├── README.md             (Documentation)
+        ├── LICENSE               (License file)
+        ├── config/
+        │   └── config.yaml       (Default user-editable config)
+        └── working_files/
+            ├── input/            (Empty or with sample data)
+            ├── output/           (Placeholder)
+            └── ...
+        ```
+
+3.  **Build Process Update**:
+    *   Update `docs/RELEASE_PROCESS.md` to include the steps for creating this archive.
+    *   (Optional) Create a helper script `scripts/build_release.sh` to:
+        1.  Run PyInstaller.
+        2.  Create the directory structure.
+        3.  Copy the binary, config, and readme.
+        4.  Zip the result.
+
+4.  **Verification**:
+    *   Test running the binary from a clean directory with an external `config/config.yaml`.
+    *   Verify that changes to the external config (e.g., changing `output_dir`) are respected by the binary.
+
+## 5. Documentation & Housekeeping
+    *   **Update README.md**:
+        *   Revise the "Installation" section to reflect the new Zip archive format.
+        *   Explain the directory structure (binary, config, working_files).
+        *   Clarify that users should edit `config/config.yaml` to change settings.
+    *   **Update .gitignore**: Ensure the new release artifacts (zip files, release folders) are ignored.
+    *   **Clean up**: Remove any obsolete build artifacts or temporary files.
+
 ## 7. Future Work
 - Union polygons across multiple radars.
 - Advanced propagation modeling.
