@@ -5,6 +5,14 @@ __pycache__/
 .env
 .venv/
 .env*/
+
+# Logs and caches
+*.log
+data_cache/
+.cache/
+.idea/
+.vscode/
+
 # Ignore working files, but keep the sample input
 working_files/*
 !working_files/input/
