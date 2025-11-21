@@ -288,8 +288,10 @@ def _radial_sweep_visibility(
     if 0 <= center_c < width and 0 <= center_r < height:
         center_elev = dem_array[center_r, center_c]
         msg = f"Elevation at Radar Location (Grid Center): {center_elev:.2f}m. Radar H: {radar_h_msl:.2f}m. Delta: {radar_h_msl - center_elev:.2f}m"
-        log.warning(msg) # Force visibility
-        print(f"DEBUG: {msg}")
+        if radar_h_msl < center_elev:
+            log.warning(msg)
+        else:
+            log.info(msg)
     else:
         log.warning(f"Radar location is outside DEM grid! Center: ({center_c}, {center_r}), Shape: ({width}, {height})")
 
@@ -543,45 +545,6 @@ def compute_viewshed(
     d_max *= 1.05
     
     log.debug(f"Computing viewshed for {radar.name} @ {target_alt_msl}m. Max range: {d_max/1000:.1f} km")
-    
-    # 2. Get DEM
-    if progress_callback:
-        progress_callback("Downloading DEM", 0)
-    bbox = approximate_bounding_box(radar.longitude, radar.latitude, d_max)
-    dem_paths = dem_client.ensure_tiles(bbox, progress=rich_progress)
-    
-    # 3. Reproject
-    log.debug("Reprojecting DEM to AEQD...")
-    if progress_callback:
-        progress_callback("Reprojecting DEM", 0)
-    
-    # Extract resource config
-    res_cfg = config.get("resources", {})
-    use_disk_swap = res_cfg.get("use_disk_swap", True)
-    max_ram_percent = res_cfg.get("max_ram_percent", 80.0)
-    
-    # Determine resolution using Multiscale config
-    ms_config = config.get('multiscale', {})
-    target_res = 30.0 # Default
-    
-    if ms_config.get('enable', True):
-        d_max_m = d_max
-        
-        # Check thresholds (furthest first)
-        if d_max_m > ms_config.get('far_m', 800000):
-            target_res = ms_config.get('res_far_m', 1000.0)
-            log.info(f"Radius {d_max_m/1000:.1f} km (Far Zone). Using resolution: {target_res}m")
-        elif d_max_m > ms_config.get('mid_m', 200000):
-            target_res = ms_config.get('res_mid_m', 120.0)
-            log.info(f"Radius {d_max_m/1000:.1f} km (Mid Zone). Using resolution: {target_res}m")
-        elif d_max_m > ms_config.get('near_m', 50000):
-            target_res = ms_config.get('res_near_m', 30.0)
-            log.info(f"Radius {d_max_m/1000:.1f} km (Near Zone). Using resolution: {target_res}m")
-        else:
-            target_res = ms_config.get('res_near_m', 30.0)
-            log.info(f"Radius {d_max_m/1000:.1f} km (Base Zone). Using resolution: {target_res}m")
-            
-    print(f"DEBUG: d_max={d_max:.2f}m, target_res={target_res}m")
     
     # 2. Get DEM
     if progress_callback:

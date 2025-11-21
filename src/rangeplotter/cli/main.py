@@ -159,12 +159,14 @@ def horizon(
     """
     start_time = time.time()
     import rangeplotter
-    print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
+    # print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
     settings = Settings.from_file(config)
     if output_dir:
         settings.output_dir = str(output_dir)
         
-    log = setup_logging(settings.logging, verbose=verbose)
+    from rich.console import Console
+    console = Console()
+    log = setup_logging(settings.logging, verbose=verbose, console=console)
     altitudes = settings.effective_altitudes
     
     kml_files = _resolve_inputs(input_path)
@@ -236,7 +238,7 @@ def horizon(
         
     if verbose >= 2:
         print("[grey58]DEBUG: Starting horizon computation loop.")
-    with progress.Progress(progress.SpinnerColumn(), progress.TextColumn("{task.description}")) as prog:
+    with progress.Progress(progress.SpinnerColumn(), progress.TextColumn("{task.description}"), console=console) as prog:
         task = prog.add_task("Computing geodesic horizons", total=len(radars))
         rings_all = {}
         meta = {}
@@ -283,7 +285,9 @@ def viewshed(
     if output_dir:
         settings.output_dir = str(output_dir)
         
-    log = setup_logging(settings.logging, verbose=verbose)
+    from rich.console import Console
+    console = Console()
+    log = setup_logging(settings.logging, verbose=verbose, console=console)
     altitudes = settings.effective_altitudes
     
     kml_files = _resolve_inputs(input_path)
@@ -370,6 +374,7 @@ def viewshed(
         progress.BarColumn(),
         progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         progress.TimeRemainingColumn(),
+        console=console
     ) as prog:
         # Estimate total steps (files * radars * altitudes)
         total_steps = len(radars) * len(altitudes) * 100
@@ -386,7 +391,7 @@ def viewshed(
                 # Find the populated radar object (with elevation data)
                 sensor = radar_map.get((r_raw.longitude, r_raw.latitude))
                 if not sensor:
-                    print(f"[red]Could not find sensor for {r_raw.name} at {r_raw.longitude}, {r_raw.latitude}[/red]")
+                    prog.console.print(f"[red]Could not find sensor for {r_raw.name} at {r_raw.longitude}, {r_raw.latitude}[/red]")
                     # Debug keys
                     # print(f"Keys: {list(radar_map.keys())}")
                     continue
