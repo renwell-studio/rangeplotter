@@ -123,9 +123,13 @@ We distribute the application as a portable ZIP archive containing the binary, c
     ```
 
 ### 6. Publish
-Use the GitHub CLI to create the release and upload the archive:
+Use the GitHub CLI to create the release and upload the archive. We specify the repo explicitly to avoid local git config permission issues:
 ```bash
-gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --title "${VERSION}" --generate-notes
+gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --title "${VERSION}" --generate-notes
+```
+If the release already exists (e.g. created by CI), use upload instead:
+```bash
+gh release upload ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --clobber
 ```
 Alternatively, upload `release/rangeplotter_${VERSION}_linux.zip` manually via the GitHub website.
 
