@@ -276,6 +276,7 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
 
     def extract_from_element(element):
         sensor_loc = None
+        sensor_name = None
         viewshed_poly = None
         style_config = {}
         
@@ -294,6 +295,7 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                         parts = coords.text.strip().split(',')
                         if len(parts) >= 2:
                             sensor_loc = (float(parts[0]), float(parts[1]))
+                            sensor_name = name_text # Capture the name of the sensor placemark
                     
                     # Extract style from sensor placemark (IconStyle)
                     style_url = pm.find(f"{KML_NS}styleUrl")
@@ -351,7 +353,7 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                     if polys:
                         viewshed_poly = MultiPolygon(polys)
         
-        return sensor_loc, viewshed_poly, style_config
+        return sensor_loc, sensor_name, viewshed_poly, style_config
 
     # Strategy: Look for Folders.
     folders = root.findall(f".//{KML_NS}Folder")
@@ -360,15 +362,15 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
         for folder in folders:
             name_el = folder.find(f"{KML_NS}name")
             folder_name = name_el.text.strip() if name_el is not None and name_el.text else None
-            sensor, viewshed, style = extract_from_element(folder)
+            sensor, s_name, viewshed, style = extract_from_element(folder)
             if sensor and viewshed:
-                results.append({'folder_name': folder_name, 'sensor': sensor, 'viewshed': viewshed, 'style': style})
+                results.append({'folder_name': folder_name, 'sensor': sensor, 'sensor_name': s_name, 'viewshed': viewshed, 'style': style})
     
     # If no results from folders, try the whole document (backward compatibility)
     if not results:
-        sensor, viewshed, style = extract_from_element(root)
+        sensor, s_name, viewshed, style = extract_from_element(root)
         if sensor and viewshed:
-             results.append({'folder_name': None, 'sensor': sensor, 'viewshed': viewshed, 'style': style})
+             results.append({'folder_name': None, 'sensor': sensor, 'sensor_name': s_name, 'viewshed': viewshed, 'style': style})
                         
     return results
 

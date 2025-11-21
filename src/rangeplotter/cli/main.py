@@ -445,11 +445,15 @@ def viewshed(
                         
                         export_viewshed_kml(
                             viewshed_polygon=poly,
-                            sensor_location=(sensor.longitude, sensor.latitude),
                             output_path=out_path,
-                            sensor_name=sensor.name,
                             altitude=alt,
-                            style_config=final_style
+                            style_config=final_style,
+                            sensors=[{
+                                'name': sensor.name,
+                                'location': (sensor.longitude, sensor.latitude),
+                                'style_config': final_style
+                            }],
+                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
                         )
                         
                         if verbose >= 1:
@@ -556,7 +560,7 @@ def detection_range(
                 'sensor': res['sensor'],
                 'viewshed': res['viewshed'],
                 'style': res.get('style', {}),
-                'name': res.get('folder_name') or kml_file.stem
+                'name': res.get('sensor_name') or res.get('folder_name') or kml_file.stem
             })
 
     if not parsed_data:
@@ -640,14 +644,21 @@ def detection_range(
                 rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
                 filename = f"visibility-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
                 
+                sensors_list = []
+                for item in items:
+                    sensors_list.append({
+                        'name': item['name'],
+                        'location': item['sensor'],
+                        'style_config': item['style']
+                    })
+
                 export_viewshed_kml(
                     viewshed_polygon=final_poly,
-                    sensor_location=items[0]['sensor'], # Use first sensor location
                     output_path=specific_out_dir / filename,
-                    sensor_name=base_name,
                     altitude=alt,
                     style_config=style_to_use,
-                    filename_override=filename
+                    sensors=sensors_list,
+                    document_name=base_name
                 )
                 
                 prog.advance(task)

@@ -27,36 +27,47 @@ def to_kml_color(hex_col: str, opacity_float: float) -> str:
 
 def export_viewshed_kml(
     viewshed_polygon: Union[Polygon, MultiPolygon],
-    sensor_location: Tuple[float, float], # lon, lat
     output_path: Path,
-    sensor_name: str,
     altitude: float,
     style_config: dict,
+    sensors: Optional[List[Dict[str, Any]]] = None,
+    document_name: Optional[str] = None,
+    # Legacy support
+    sensor_location: Optional[Tuple[float, float]] = None,
+    sensor_name: Optional[str] = None,
     filename_override: Optional[str] = None
 ) -> None:
     """
-    Export a viewshed to a self-contained KML file with sensor location and polygon.
+    Export a viewshed to a self-contained KML file with sensor location(s) and polygon.
     """
-    alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
-    safe_name = sensor_name.replace(" ", "_").replace("/", "-")
+    # Normalize inputs
+    if sensors is None:
+        sensors = []
+        if sensor_location and sensor_name:
+             sensors.append({
+                 'name': sensor_name,
+                 'location': sensor_location,
+                 'style_config': style_config
+             })
     
-    if filename_override:
-        doc_name = filename_override
-        if doc_name.endswith(".kml"):
-            doc_name = doc_name[:-4]
-    else:
-        doc_name = f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
+    if document_name is None:
+        if filename_override:
+            document_name = filename_override
+            if document_name.endswith(".kml"):
+                document_name = document_name[:-4]
+        elif sensor_name:
+             alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
+             safe_name = sensor_name.replace(" ", "_").replace("/", "-")
+             document_name = f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
+        else:
+             document_name = "Viewshed Output"
     
+    # Polygon style
     line_color = style_config.get("line_color", "#FFA500")
     line_width = style_config.get("line_width", 2)
     fill_color = style_config.get("fill_color", None)
     fill_opacity = style_config.get("fill_opacity", 0.0)
     
-    # Icon style
-    icon_href = style_config.get("icon_href", "http://maps.google.com/mapfiles/kml/shapes/target.png")
-    icon_scale = style_config.get("icon_scale", 1.0)
-    icon_color = style_config.get("icon_color", None) # Already KML format aabbggrr if present
-
     line_kml = to_kml_color(line_color, 1.0)
     
     fill_val = "0"
@@ -69,19 +80,37 @@ def export_viewshed_kml(
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{doc_name}</name>',
-        '    <Style id="sensorStyle">',
-        '      <IconStyle>',
-        f'        <scale>{icon_scale}</scale>',
-        f'        <Icon><href>{icon_href}</href></Icon>',
+        f'    <name>{document_name}</name>',
     ]
     
-    if icon_color:
-        kml_content.insert(-1, f'        <color>{icon_color}</color>')
+    # Generate styles for each sensor
+    # To avoid duplicate IDs, we can use a hash or index.
+    # Or just embed styles? KML prefers shared styles.
+    # Let's generate a style for each sensor if they differ.
+    
+    # For simplicity, let's define a default sensor style and then specific ones if needed.
+    # Actually, let's just write a style for each sensor using its index to ensure uniqueness.
+    
+    for i, sensor in enumerate(sensors):
+        s_config = sensor.get('style_config', {})
+        icon_href = s_config.get("icon_href", "http://maps.google.com/mapfiles/kml/shapes/target.png")
+        icon_scale = s_config.get("icon_scale", 1.0)
+        icon_color = s_config.get("icon_color", None)
         
+        kml_content.extend([
+            f'    <Style id="sensorStyle_{i}">',
+            '      <IconStyle>',
+            f'        <scale>{icon_scale}</scale>',
+            f'        <Icon><href>{icon_href}</href></Icon>',
+        ])
+        if icon_color:
+            kml_content.append(f'        <color>{icon_color}</color>')
+        kml_content.extend([
+            '      </IconStyle>',
+            '    </Style>'
+        ])
+
     kml_content.extend([
-        '      </IconStyle>',
-        '    </Style>',
         '    <Style id="polyStyle">',
         '      <LineStyle>',
         f'        <color>{line_kml}</color>',
@@ -92,17 +121,63 @@ def export_viewshed_kml(
         f'        <fill>{fill_val}</fill>',
         '      </PolyStyle>',
         '    </Style>',
-        # '    <Folder>',
-        # f'      <name>{sensor_name} Data</name>',
+    ])
+    
+    # Add Sensor Placemarks
+    for i, sensor in enumerate(sensors):
+        name = sensor['name']
+        loc = sensor['location']
+        kml_content.extend([
+            '      <Placemark>',
+            f'        <name>{name}</name>',
+            f'        <styleUrl>#sensorStyle_{i}</styleUrl>',
+            '        <Point>',
+            f'          <coordinates>{loc[0]},{loc[1]},0</coordinates>',
+            '        </Point>',
+            '      </Placemark>'
+        ])
+
+    # Add Viewshed Placemark
+    # If it's a union, we use document_name or constructed name.
+    # If it's a single sensor, we might want to use "viewshed-{sensor_name}"
+    # But document_name is already set to that in the single case.
+    # So using document_name is safe.
+    
+    # Wait, if document_name is "MyRun", the polygon name becomes "MyRun".
+    # The user said: "never used ... for polygons which have not been unioned".
+    # If not unioned (single sensor), document_name is "viewshed-{sensor}-..." (calculated above).
+    # If unioned (detection-range with --name), document_name is "MyRun".
+    # So using document_name seems correct for the Polygon name too?
+    # "The use of a supplied --name should be applied ... within the kml filenames themselves, but never used in placemarks ... or for polygons which have not been unioned"
+    
+    # If I supply --name "MyRun" for a SINGLE sensor:
+    # document_name = "MyRun"
+    # Polygon Name = "MyRun" -> This violates "never used ... for polygons which have not been unioned".
+    # It should be "viewshed-{sensor}-...".
+    
+    # So I need a separate `polygon_name` argument or logic.
+    
+    poly_name = document_name
+    # Heuristic: if document_name doesn't start with "viewshed-" and we have 1 sensor, maybe revert to default?
+    # But detection-range passes base_name as document_name.
+    
+    # Let's just use a generic name if it's a union, or specific if single.
+    # Actually, let's construct the polygon name based on sensors if possible?
+    # If len(sensors) == 1, use "viewshed-{sensors[0]['name']}-..."
+    # If len(sensors) > 1, use document_name (which is likely "Union" or "MyRun").
+    
+    alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
+    
+    if len(sensors) == 1:
+        safe_s_name = sensors[0]['name'].replace(" ", "_").replace("/", "-")
+        poly_name = f"viewshed-{safe_s_name}-tgt_alt_{alt_str}m"
+    else:
+        # Union case
+        poly_name = f"{document_name}-viewshed"
+
+    kml_content.extend([
         '      <Placemark>',
-        f'        <name>{sensor_name}</name>',
-        '        <styleUrl>#sensorStyle</styleUrl>',
-        '        <Point>',
-        f'          <coordinates>{sensor_location[0]},{sensor_location[1]},0</coordinates>',
-        '        </Point>',
-        '      </Placemark>',
-        '      <Placemark>',
-        f'        <name>viewshed-{sensor_name}-tgt_alt_{alt_str}m</name>',
+        f'        <name>{poly_name}</name>',
         '        <styleUrl>#polyStyle</styleUrl>',
         '        <MultiGeometry>'
     ])
