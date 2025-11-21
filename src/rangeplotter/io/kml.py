@@ -18,10 +18,32 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
         style_id = style.get("id")
         if style_id:
             styles[f"#{style_id}"] = style
+            
+    # Extract StyleMaps
+    style_maps = {}
+    for sm in root.findall(f".//{KML_NS}StyleMap"):
+        sm_id = sm.get("id")
+        if sm_id:
+            # Find the 'normal' key
+            normal_style_url = None
+            for pair in sm.findall(f"{KML_NS}Pair"):
+                key = pair.find(f"{KML_NS}key")
+                if key is not None and key.text == "normal":
+                    url = pair.find(f"{KML_NS}styleUrl")
+                    if url is not None:
+                        normal_style_url = url.text.strip()
+                        break
+            if normal_style_url:
+                style_maps[f"#{sm_id}"] = normal_style_url
 
     def extract_style_from_element(element, style_url=None):
         """Extract style attributes from a Style element or styleUrl."""
         style_el = None
+        
+        # Resolve StyleMap if needed
+        if style_url and style_url in style_maps:
+            style_url = style_maps[style_url]
+            
         if style_url and style_url in styles:
             style_el = styles[style_url]
         elif element is not None:
@@ -31,6 +53,34 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
             return {}
             
         config = {}
+        
+        # IconStyle
+        icon_style = style_el.find(f"{KML_NS}IconStyle")
+        if icon_style is not None:
+            color = icon_style.find(f"{KML_NS}color")
+            scale = icon_style.find(f"{KML_NS}scale")
+            icon = icon_style.find(f"{KML_NS}Icon")
+            
+            if color is not None and color.text:
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    hex_color = f"#{rr}{gg}{bb}"
+                    # Use Icon color as default for Line/Poly if not specified?
+                    config["line_color"] = hex_color
+                    config["fill_color"] = hex_color
+                    config["icon_color"] = kml_color # Keep original KML aabbggrr for IconStyle
+            
+            if scale is not None and scale.text:
+                try:
+                    config["icon_scale"] = float(scale.text)
+                except ValueError:
+                    pass
+            
+            if icon is not None:
+                href = icon.find(f"{KML_NS}href")
+                if href is not None and href.text:
+                    config["icon_href"] = href.text.strip()
         
         # LineStyle
         line_style = style_el.find(f"{KML_NS}LineStyle")
@@ -118,23 +168,75 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
     
     # Extract styles map
     styles = {}
+    style_maps = {}
+    
     for style in root.findall(f".//{KML_NS}Style"):
         style_id = style.get("id")
         if style_id:
             styles[f"#{style_id}"] = style
+
+    for style_map in root.findall(f".//{KML_NS}StyleMap"):
+        map_id = style_map.get("id")
+        if map_id:
+            style_maps[f"#{map_id}"] = style_map
+            
+    def resolve_style(style_url):
+        if not style_url:
+            return None
+        
+        # If it's a StyleMap, resolve to normal style
+        if style_url in style_maps:
+            sm = style_maps[style_url]
+            for pair in sm.findall(f"{KML_NS}Pair"):
+                key = pair.find(f"{KML_NS}key")
+                if key is not None and key.text == "normal":
+                    url = pair.find(f"{KML_NS}styleUrl")
+                    if url is not None and url.text:
+                        return resolve_style(url.text.strip())
+        
+        # If it's a Style, return it
+        if style_url in styles:
+            return styles[style_url]
+            
+        return None
             
     def extract_style_from_element(element, style_url=None):
         """Extract style attributes from a Style element or styleUrl."""
-        style_el = None
-        if style_url and style_url in styles:
-            style_el = styles[style_url]
-        elif element is not None:
+        style_el = resolve_style(style_url)
+        
+        if style_el is None and element is not None:
+            # Try finding inline style
             style_el = element.find(f"{KML_NS}Style")
             
         if style_el is None:
             return {}
             
         config = {}
+        
+        # IconStyle
+        icon_style = style_el.find(f"{KML_NS}IconStyle")
+        if icon_style is not None:
+            color = icon_style.find(f"{KML_NS}color")
+            scale = icon_style.find(f"{KML_NS}scale")
+            icon = icon_style.find(f"{KML_NS}Icon")
+            
+            if color is not None and color.text:
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    # hex_color = f"#{rr}{gg}{bb}"
+                    config["icon_color"] = kml_color
+            
+            if scale is not None and scale.text:
+                try:
+                    config["icon_scale"] = float(scale.text)
+                except ValueError:
+                    pass
+            
+            if icon is not None:
+                href = icon.find(f"{KML_NS}href")
+                if href is not None and href.text:
+                    config["icon_href"] = href.text.strip()
         
         # LineStyle
         line_style = style_el.find(f"{KML_NS}LineStyle")
@@ -193,6 +295,12 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                         if len(parts) >= 2:
                             sensor_loc = (float(parts[0]), float(parts[1]))
                     
+                    # Extract style from sensor placemark (IconStyle)
+                    style_url = pm.find(f"{KML_NS}styleUrl")
+                    s_url = style_url.text.strip() if style_url is not None else None
+                    sensor_style = extract_style_from_element(pm, s_url)
+                    style_config.update(sensor_style)
+                    
             # Check for Polygon or MultiGeometry (Viewshed)
             def extract_polygon(poly_el) -> Optional[Polygon]:
                 outer = poly_el.find(f"{KML_NS}outerBoundaryIs/{KML_NS}LinearRing/{KML_NS}coordinates")
@@ -227,7 +335,8 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                 # Extract style
                 style_url = pm.find(f"{KML_NS}styleUrl")
                 s_url = style_url.text.strip() if style_url is not None else None
-                style_config = extract_style_from_element(pm, s_url)
+                poly_style = extract_style_from_element(pm, s_url)
+                style_config.update(poly_style)
                 
                 if poly is not None:
                     p = extract_polygon(poly)

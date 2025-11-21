@@ -51,6 +51,11 @@ def export_viewshed_kml(
     line_width = style_config.get("line_width", 2)
     fill_color = style_config.get("fill_color", None)
     fill_opacity = style_config.get("fill_opacity", 0.0)
+    
+    # Icon style
+    icon_href = style_config.get("icon_href", "http://maps.google.com/mapfiles/kml/shapes/target.png")
+    icon_scale = style_config.get("icon_scale", 1.0)
+    icon_color = style_config.get("icon_color", None) # Already KML format aabbggrr if present
 
     line_kml = to_kml_color(line_color, 1.0)
     
@@ -67,8 +72,14 @@ def export_viewshed_kml(
         f'    <name>{doc_name}</name>',
         '    <Style id="sensorStyle">',
         '      <IconStyle>',
-        '        <scale>1.0</scale>',
-        '        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>',
+        f'        <scale>{icon_scale}</scale>',
+        f'        <Icon><href>{icon_href}</href></Icon>',
+    ]
+    
+    if icon_color:
+        kml_content.insert(-1, f'        <color>{icon_color}</color>')
+        
+    kml_content.extend([
         '      </IconStyle>',
         '    </Style>',
         '    <Style id="polyStyle">',
@@ -94,7 +105,7 @@ def export_viewshed_kml(
         f'        <name>viewshed-{sensor_name}-tgt_alt_{alt_str}m</name>',
         '        <styleUrl>#polyStyle</styleUrl>',
         '        <MultiGeometry>'
-    ]
+    ])
 
     polys = []
     if isinstance(viewshed_polygon, Polygon):
