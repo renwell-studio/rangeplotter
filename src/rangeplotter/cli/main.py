@@ -481,7 +481,8 @@ def viewshed(
 @app.command()
 def detection_range(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_files: List[str] = typer.Option(..., "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
+    input_files: Optional[List[str]] = typer.Option(None, "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
+    extra_files: Optional[List[str]] = typer.Argument(None, help="Additional input files (supports wildcards)"),
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(Path("output/detection_range"), "--output", "-o", help="Output directory"),
@@ -491,10 +492,21 @@ def detection_range(
     """
     settings = Settings.from_file(config)
 
+    # Combine inputs
+    all_inputs = []
+    if input_files:
+        all_inputs.extend(input_files)
+    if extra_files:
+        all_inputs.extend(extra_files)
+
+    if not all_inputs:
+        typer.echo("[red]No input files provided. Use --input or positional arguments.[/red]")
+        raise typer.Exit(code=1)
+
     # Resolve inputs (handle wildcards manually if shell didn't)
     resolved_files = []
     import glob
-    for inp in input_files:
+    for inp in all_inputs:
         # Check if it's a glob pattern
         if "*" in inp or "?" in inp or "[" in inp:
             matches = glob.glob(inp)

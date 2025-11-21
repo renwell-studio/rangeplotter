@@ -32,7 +32,8 @@
  - [x] add detection range array to config for default behaviour
  - [x] allow use of /* to specify multiple input files
  - [x] update --help to include new usage notes
- - [ ] sort out naming when using multiple input sites
+ - [x] sort out naming when using multiple input sites
+ - [x] why do I need to use "" to enclose input path when using wildcards?
 
 - [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
 - [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
