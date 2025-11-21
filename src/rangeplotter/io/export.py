@@ -318,25 +318,88 @@ def kml_ring_placemark(name: str, coords: List[str], line_color_hex: str, line_w
     )
 
 def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], radars_meta: Dict[str, Tuple[float, float]], style: Dict):
-    parts = [KML_HEADER]
+    """
+    Export horizon rings to a KML file with shared styles and folder structure.
+    """
+    line_color = style.get("line_color", "#FFA500")
+    line_width = style.get("line_width", 2)
+    fill_color = style.get("fill_color", None)
+    fill_opacity = style.get("fill_opacity", 0.0)
+
+    line_kml = to_kml_color(line_color, 1.0)
+    
+    fill_val = "0"
+    fill_kml = "00000000"
+    if fill_color and fill_opacity > 0:
+        fill_val = "1"
+        fill_kml = to_kml_color(fill_color, fill_opacity)
+
+    kml_content = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        '  <Document>',
+        '    <name>Geometric Horizons</name>',
+        '    <Style id="sensorStyle">',
+        '      <IconStyle>',
+        '        <scale>1.0</scale>',
+        '        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>',
+        '      </IconStyle>',
+        '    </Style>',
+        '    <Style id="horizonStyle">',
+        '      <LineStyle>',
+        f'        <color>{line_kml}</color>',
+        f'        <width>{line_width}</width>',
+        '      </LineStyle>',
+        '      <PolyStyle>',
+        f'        <color>{fill_kml}</color>',
+        f'        <fill>{fill_val}</fill>',
+        '      </PolyStyle>',
+        '    </Style>'
+    ]
+
     for radar_name, entries in rings.items():
         lon, lat = radars_meta[radar_name]
+        
+        kml_content.append('    <Folder>')
+        kml_content.append(f'      <name>{radar_name}</name>')
+        
+        # Sensor Placemark
+        kml_content.extend([
+            '      <Placemark>',
+            f'        <name>{radar_name}</name>',
+            '        <styleUrl>#sensorStyle</styleUrl>',
+            '        <Point>',
+            f'          <coordinates>{lon},{lat},0</coordinates>',
+            '        </Point>',
+            '      </Placemark>'
+        ])
+
+        # Horizon Rings
         for alt, dist_m in entries:
             coords = geodesic_circle_coords(lon, lat, dist_m)
-            placemark_name = f"{radar_name}_ALT_{int(alt)}m"
-            parts.append(
-                kml_ring_placemark(
-                    placemark_name,
-                    coords,
-                    style.get("line_color", "#FFA500"),
-                    style.get("line_width", 2),
-                    style.get("fill_color"),
-                    style.get("fill_opacity", 0.0),
-                )
-            )
-    parts.append(KML_FOOTER)
+            coord_str = " ".join(coords)
+            
+            alt_label = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+            
+            kml_content.extend([
+                '      <Placemark>',
+                f'        <name>Horizon ({alt_label}m target altitude)</name>',
+                '        <styleUrl>#horizonStyle</styleUrl>',
+                '        <Polygon>',
+                '          <outerBoundaryIs><LinearRing><coordinates>',
+                f'            {coord_str}',
+                '          </coordinates></LinearRing></outerBoundaryIs>',
+                '        </Polygon>',
+                '      </Placemark>'
+            ])
+            
+        kml_content.append('    </Folder>')
+
+    kml_content.append('  </Document>')
+    kml_content.append('</kml>')
+
     with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(parts))
+        f.write("\n".join(kml_content))
 
 def export_combined_kml(
     output_path: Path,
