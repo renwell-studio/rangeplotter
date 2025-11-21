@@ -270,7 +270,7 @@ def horizon(
 def viewshed(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(None, "--input", "-i", help="Path to radar KML file or directory"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Override output directory"),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Optional. By default files are saved to output/viewshed/"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -279,11 +279,13 @@ def viewshed(
     This command downloads Copernicus GLO-30 DEM data and performs a radial sweep 
     Line-of-Sight (LOS) calculation, accounting for Earth curvature, refraction, 
     and terrain obstructions.
+
+    Outputs are saved as individual KML files per site and altitude.
     """
     start_time = time.time()
     settings = Settings.from_file(config)
-    if output_dir:
-        settings.output_dir = str(output_dir)
+    # if output_dir:
+    #     settings.output_dir = str(output_dir)
         
     from rich.console import Console
     console = Console()
@@ -356,8 +358,14 @@ def viewshed(
     from rangeplotter.io.export import export_viewshed_kml
     from rangeplotter.io.kml import extract_kml_styles
     
-    output_dir = Path(settings.output_dir) / "viewshed"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir:
+        # User specified output directory, use it directly
+        out_dir_path = Path(output_dir)
+    else:
+        # Default behavior: use config output_dir + /viewshed
+        out_dir_path = Path(settings.output_dir) / "viewshed"
+        
+    out_dir_path.mkdir(parents=True, exist_ok=True)
     
     # Map populated radars by location for easy lookup
     radar_map = {(r.longitude, r.latitude): r for r in radars}
@@ -422,7 +430,7 @@ def viewshed(
                         safe_name = sensor.name.replace(" ", "_").replace("/", "-")
                         alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                         filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m.kml"
-                        out_path = output_dir / filename
+                        out_path = out_dir_path / filename
                         
                         export_viewshed_kml(
                             viewshed_polygon=poly,
