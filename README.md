@@ -1,249 +1,163 @@
 # RangePlotter
 
-Prototype radar line-of-sight terrain visibility utility.
+**Advanced Sensor Line-of-Sight & Terrain Visibility Analysis**
 
-## Status
-Active development. Core LOS algorithms and DEM integration implemented.
+RangePlotter is a command line, python-based geospatial utility designed to calculate high-fidelity sensor coverage maps for visualisation in an appropriate viewer (such as Google Earth). Unlike simple geometric tools, RangePlotter integrates high-resolution global terrain data (Copernicus GLO-30) to determine exactly where a sensor can see, accounting for Earth curvature, atmospheric refraction, and terrain masking (viewsheds).
 
-## Quick Start (End User)
-1.  **Download** the latest release for Linux from the [Releases page](https://github.com/renwell-studio/rangeplotter/releases).
+## Use Cases
+
+*   **Radar Network Visualisation**: Optimize site selection by visualizing coverage gaps and terrain shadowing.
+*   **Telecommunications**: Analyze line-of-sight for microwave links or radio towers.
+*   **Gap Analysis**: Identify blind spots in existing sensor networks.
+
+---
+
+## Tech Stack & Methodology
+
+RangePlotter is built on a robust open-source geospatial stack:
+*   **Core Engine**: Python 3.12+
+*   **Geospatial Processing**: `Rasterio` (GDAL), `Shapely`, `PyProj`.
+*   **Terrain Data**: Automatic fetching and caching of **Copernicus GLO-30 DEM** (30m global resolution).
+*   **Physics**:
+    *   **Adjustable Earth Equivalent Radius Model**: Accounts for atmospheric refraction.
+    *   **Azimuthal Equidistant Projection**: Automatically centers calculations on each sensor for high-precision distance measurements.
+
+---
+
+## Installation
+
+### Option 1: Standalone Binary (Recommended for Linux Users)
+No Python environment required.
+1.  **Download** the latest release from the [GitHub Releases page](https://github.com/renwell-studio/rangeplotter/releases).
 2.  **Make executable**:
     ```bash
     chmod +x rangeplotter
     ```
 3.  **Run**:
     ```bash
-    # Calculate theoretical horizon (no terrain)
-    ./rangeplotter horizon --input working_files/input/radars_sample.kml
-
-    # Calculate terrain-aware viewshed
-    ./rangeplotter viewshed --input working_files/input/radars_sample.kml
+    ./rangeplotter --help
     ```
 
-## Quick Start (Developer)
-1.  **Clone and Setup**:
+### Option 2: Python Source (For Developers)
+1.  Clone the repository:
     ```bash
     git clone https://github.com/renwell-studio/rangeplotter.git
     cd rangeplotter
+    ```
+2.  Set up environment:
+    ```bash
     python3 -m venv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -e .
     ```
-2.  **Run via Python**:
+3.  Run via module:
     ```bash
-    python -m rangeplotter.cli.main horizon --input working_files/input/radars_sample.kml
+    python -m rangeplotter.cli.main --help
     ```
 
-## Workflow
+---
 
-## Workflow
+## Credentials (Copernicus DEM)
 
-### 1. Viewshed Calculation (`viewshed`)
-The `viewshed` command performs the computationally intensive work of calculating geometric visibility. It determines the line-of-sight from a static sensor location to a target at a specific altitude (or set of altitudes), accounting for:
-- Earth curvature
-- Atmospheric refraction (k-factor)
-- Terrain obstructions (using Copernicus GLO-30 DEM data)
+RangePlotter automatically downloads terrain data from the **Copernicus Data Space Ecosystem (CDSE)**. You need a free account to access this data.
 
-**Output:**
-This command generates "raw" viewshed polygons. Each output is a standalone KML file representing the visibility for **one sensor** at **one target altitude**.
-- **Location:** `working_files/viewshed/` (default)
-- **Naming:** `viewshed-[sensor_name]-tgt_alt_[altitude]m.kml`
+### Step 1: Register
+Create a free account at [dataspace.copernicus.eu](https://dataspace.copernicus.eu/).
 
-These files are intended to be the foundational building blocks for further analysis or visualization. They are saved individually to allow for efficient caching and reprocessing without re-running the expensive visibility calculation.
+### Step 2: Configure Credentials
+You have two options for providing credentials. We recommend **Option B** (Refresh Token) for security, as it avoids storing your password in plain text.
 
-### 2. Detection Range Clipping (`detection-range`)
-The `detection-range` command takes the raw viewsheds and clips them to a maximum instrumented range. It can also combine multiple sensors into a single network coverage map (union).
+#### Option A: Username & Password (Simplest)
+Create a `.env` file in the folder where you run the tool:
+```bash
+COPERNICUS_USERNAME=your_email@example.com
+COPERNICUS_PASSWORD=your_password
+```
 
-**Output:**
-- **Location:** `working_files/detection_range/` (default)
-- **Naming:** `visibility-[name]-tgt_alt_[altitude]m-det_rng_[range]km.kml`
+#### Option B: Refresh Token (Secure)
+1.  Create a temporary `.env` file with your username and password as above.
+2.  Run the helper command to generate a long-lived refresh token:
+    ```bash
+    ./rangeplotter extract-refresh-token
+    ```
+3.  Copy the output line starting with `COPERNICUS_REFRESH_TOKEN=...`.
+4.  Update your `.env` file to remove your password and paste the token:
+    ```bash
+    COPERNICUS_USERNAME=your_email@example.com
+    COPERNICUS_REFRESH_TOKEN=eyJhbGciOiJIUz... (long string)
+    ```
 
-## Usage
+---
 
-The CLI supports several commands. Use `--help` for detailed information on any command.
+## ⚡ Quick Start Guide
 
-**Note:** The examples below assume you are using the standalone binary `./rangeplotter`. If you are a developer running from source, substitute `./rangeplotter` with `python -m rangeplotter.cli.main`.
+### 1. Prepare Input
+Place your radar sites in a KML file (e.g., `working_files/input/my_radars.kml`).
+*   **Format**: Standard Google Earth KML.
+*   **Content**: `Placemark` points. The name of the placemark will be used as the sensor name.
 
-### Common Flags
-- `--config`: Path to config YAML (default: `config/config.yaml`)
-- `--input` / `-i`: Path to radar KML file or directory containing KMLs (optional, defaults to `working_files/input`)
-- `--output` / `-o`: Override output directory (optional)
-- `--verbose` / `-v`: Verbosity level (use `-v` for Info, `-vv` for Debug)
-
-### Commands
-
-#### `horizon`
-Calculate the theoretical maximum geometric horizon (range rings) for each sensor location based on Earth curvature and atmospheric refraction, but without terrain awareness.
+### 2. Calculate Geometric Horizon (Optional)
+Generate theoretical range rings (smooth earth) to verify maximum line of sight over open water.
 ```bash
 ./rangeplotter horizon
 ```
 
-#### `viewshed`
-Calculate the actual terrain-aware visibility for each sensor location using Copernicus GLO-30 DEM data.
+### 3. Calculate Terrain Viewshed (Primary)
+Compute the actual visibility. This downloads DEM tiles, reprojects them, and performs terrain-aware line-of-sight analysis to targets at any given altitude.
 ```bash
 ./rangeplotter viewshed
 ```
+*   **Output**: `working_files/viewshed/viewshed-[SiteName]-tgt_alt_[Alt]m.kml`
 
-#### `detection-range`
-Clip viewsheds to maximum detection ranges and optionally union them.
+### 4. Apply Detection Ranges
+Clip the raw viewsheds to specific instrumented ranges (e.g., 100km, 200km) and merge overlapping coverage from multiple sensor locations.
 ```bash
-# Process all viewsheds in the default output directory
-./rangeplotter detection-range --input working_files/viewshed/*.kml
-
-# Process specific files with a custom range
-./rangeplotter detection-range --input "working_files/viewshed/MyRadar*.kml" --range 150
+./rangeplotter detection-range --range 150,300
 ```
+*   **Output**: `working_files/detection_range/`
 
-#### `prepare-dem`
-Pre-download DEM tiles for a given area to populate the cache.
-```bash
-./rangeplotter prepare-dem
-```
+---
 
-#### `debug-auth-dem`
-Test authentication and DEM download capabilities.
-```bash
-./rangeplotter debug-auth-dem
-```
+## Configuration
 
-## Development Setup
-**CRITICAL:** Always ensure you are running inside the project's virtual environment to avoid dependency conflicts.
+The behavior is controlled by `config/config.yaml`. Key settings include:
 
-1. Create and activate the virtual environment:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+| Setting | Description | Default |
+| :--- | :--- | :--- |
+| `altitudes_msl_m` | List of target altitudes to analyze during viewshed calculation (e.g., `[50, 1000]`). | `[50]` |
+| `radome_height_m_agl` | Height of the sensor above ground. | `5.0` |
+| `atmospheric_k_factor` | Refraction coefficient (4/3 Earth is common for radar applications). | `1.333` |
+| `simplify_tolerance_m` | Polygon simplification (higher = smaller files). | `5.0` |
+| `input_dir` | Directory to scan for KML inputs. | `working_files/input` |
 
-2. Verify you are using the correct Python (should output `.../visibility/.venv/bin/python`):
-```bash
-which python
-```
+---
 
-3. Install dependencies:
-```bash
-pip install --upgrade pip
-pip install -e .
-```
+## Bugs & Feature Requests
 
-If editable install fails ensure `pyproject.toml` dependencies are correctly formatted and run again.
+Please report issues via the [GitHub Issue Tracker](https://github.com/renwell-studio/rangeplotter/issues).
+*   **Bugs**: Include the command run, error output, log contents and a sample KML if possible.
+*   **Features**: Describe the use case and desired output.
 
-## Credentials
-Copernicus Data Space Ecosystem uses an OpenID Connect / Keycloak endpoint with a **public client id** (`cdse-public`).
-Token acquisition for downloads is performed via the Resource Owner Password Credentials grant (`grant_type=password`) OR subsequent `refresh_token` grants. There is **no client secret** for the public client.
+---
 
-Set credentials via environment (avoid putting them in YAML config):
-```bash
-export COPERNICUS_USERNAME="your_username"
-export COPERNICUS_PASSWORD="your_password"
-# Optional after first token retrieval – store only refresh token (preferred):
-export COPERNICUS_REFRESH_TOKEN="your_refresh_token"
-```
-`COPERNICUS_CLIENT_ID` can override the default if needed (defaults to `cdse-public`).
+## Credit & Support
 
-Alternatively use a `.env` file (auto-loaded if present):
-```bash
-cp .env.example .env
-chmod 600 .env
-edit .env  # add your values
-```
-Keep `.env` out of version control (already gitignored).
+Developed by **Renwell Studio**.
+*   If you find this tool useful or interesting, please consider supporting development.
+*   **Donations**: [ko-fi](ko-fi.com/renwell)
 
-### Recommended Storage Patterns
+---
 
-Development (local):
-- Use `.env` with 600 permissions or shell `export` in a dedicated terminal session.
-- After initial token fetch, remove password from `.env` and keep only `COPERNICUS_REFRESH_TOKEN`.
-- Avoid putting secrets in your shell history (prefix with space in bash to skip history).
+## License
 
-Production (systemd service):
-- Create `/etc/visibility/credentials.env` owned by root:visibility with `chmod 640`.
-- Reference in unit file: `EnvironmentFile=/etc/visibility/credentials.env`.
-- Populate minimally (prefer refresh token only):
-	```
-	COPERNICUS_REFRESH_TOKEN=xxxxx
-	COPERNICUS_CLIENT_ID=cdse-public
-	```
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
-Docker:
-- Use Docker secrets or pass via environment at runtime (`--env-file env.prod`).
-- Never bake credentials into the image.
+**Note on Third-Party Dependencies:**
+This project uses `fastkml` and `simplekml`, which are licensed under the **LGPL**.
+- If you modify these libraries and redistribute this application, you must comply with the LGPL terms (e.g., allowing users to replace the modified library).
+- As this project is open source, the source code is available for users to rebuild the application with their own versions of these dependencies.
 
-Kubernetes:
-- Store in Secret manifest; mount as env vars.
-- Optionally use sealed-secrets or external secret store (e.g. Vault).
-
-CI/CD:
-- Inject as pipeline protected variables; never commit.
-- Pipeline step runs `echo "$COPERNICUS_CLIENT_ID" >> $WORKSPACE/.env` only if needed.
-
-Cloud Secret Managers:
-- For scaling, retrieve at startup (e.g. AWS Secrets Manager, GCP Secret Manager) then set env vars before process spawn.
-- Consider secret rotation pipeline that updates only the refresh token; running services refresh automatically.
-
-### Rotation & Revocation
-- Rotate regularly; keep previous credentials briefly to avoid downtime.
-- On rotation: update secret store, restart service, verify token acquisition logs.
-- If password compromised, revoke refresh token and change password; deploy new refresh token.
-
-### Validation
-Obtain an access token (password grant) and extract the access_token field:
-```bash
-curl -s -X POST \
-	-d "grant_type=password" \
-	-d "client_id=${COPERNICUS_CLIENT_ID:-cdse-public}" \
-	-d "username=$COPERNICUS_USERNAME" \
-	-d "password=$COPERNICUS_PASSWORD" \
-	https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token | jq '.access_token != null'
-```
-
-Refresh using an existing refresh token (no password needed):
-```bash
-curl -s -X POST \
-	-d "grant_type=refresh_token" \
-	-d "client_id=${COPERNICUS_CLIENT_ID:-cdse-public}" \
-	-d "refresh_token=$COPERNICUS_REFRESH_TOKEN" \
-	https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token | jq '.access_token != null'
-```
-
-Never commit passwords; prefer storing only the refresh token in production.
-
-### One-Time Refresh Token Extraction
-Use the helper command to obtain a refresh token without exposing the access token:
-```bash
-python -m rangeplotter.cli.main extract-refresh-token \
-	--username "$COPERNICUS_USERNAME" \
-	--password   # will prompt hidden input
-```
-Print an .env snippet directly:
-```bash
-python -m rangeplotter.cli.main extract-refresh-token --username "$COPERNICUS_USERNAME" --password --print-env
-```
-Append to a specific file (creates if missing):
-```bash
-python -m rangeplotter.cli.main extract-refresh-token --username "$COPERNICUS_USERNAME" --password --env-output .env
-chmod 600 .env
-```
-After success: remove `COPERNICUS_PASSWORD` and `COPERNICUS_USERNAME` from your environment and `.env`.
-
-Example secure `.env` after onboarding:
-```
-COPERNICUS_REFRESH_TOKEN=eyJhbGciOiJSUzI1NiIsInR5cCI6...
-COPERNICUS_CLIENT_ID=cdse-public
-COPERNICUS_DATASET_IDENTIFIER=COP-DEM_GLO-30
-```
-
+---
 
 ## Troubleshooting
-- Missing `yaml`: install `PyYAML` (`pip install PyYAML`).
-- Geodesic failure: ensure `pyproj` installed; reinstall with `pip install --force-reinstall pyproj`.
-- Slow performance: reduce altitudes or disable multiscale in config.
-
-
-## Features (Planned)
-- Ellipsoidal Earth model with atmospheric k-factor.
-- Multiscale terrain LOS (Copernicus GLO-30, EGM2008).
-- KML export of range rings & LOS polygons.
-- Union visibility per altitude.
-
-See `docs/ROADMAP.md` for detailed plan.
+- Slow performance: reduce altitudes, adjust multiscale in config or adjust the CPU and RAM usage guards in config.
