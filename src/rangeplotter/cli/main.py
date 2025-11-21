@@ -16,8 +16,35 @@ import time
 import re
 import yaml
 
-app = typer.Typer(help="Radar LOS utility scaffold")
+__version__ = "0.1.0"
+
+app = typer.Typer(help="Radar LOS utility scaffold", context_settings={"help_option_names": ["-h", "--help"]})
 print("RangePlotter by Renwell | Licence: MIT | Support: ko-fi.com/renwell")
+
+def version_callback(value: bool):
+    if value:
+        print(f"\n[bold cyan]RangePlotter v{__version__}[/bold cyan]")
+        print("\n[bold]Advanced Sensor Line-of-Sight & Terrain Visibility Analysis[/bold]")
+        print("\n[bold]Key Features:[/bold]")
+        print(" • Terrain-aware viewshed analysis using Copernicus GLO-30 DEM")
+        print(" • Earth curvature and atmospheric refraction modeling")
+        print(" • Detection range clipping and network union")
+        print("\n[bold]License:[/bold] MIT License")
+        print("[bold]Author:[/bold] Renwell Studio")
+        print("[bold]GitHub:[/bold] https://github.com/renwell-studio")
+        print("[bold]Support:[/bold] https://ko-fi.com/renwell\n")
+        raise typer.Exit()
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None, "--version", callback=version_callback, is_eager=True, help="Show version and info."
+    )
+):
+    """
+    RangePlotter: Advanced Sensor Line-of-Sight & Terrain Visibility Analysis
+    """
+    pass
 
 # Load defaults from config if available
 config_path = Path("config/config.yaml")
