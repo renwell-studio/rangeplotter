@@ -14,9 +14,9 @@ output_dir: "output"
 cache_dir: "data_cache"
 
 # List of target altitudes in meters above Mean Sea Level (MSL).
-# Visibility will be calculated for each of these altitudes.
+# Viewsheds will be calculated for each of these altitudes.
 # Default list: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
-altitudes_msl_m: [100]
+altitudes_msl_m: [1000]
 
 # Height of the radar antenna (radome) above ground level (AGL) in meters.
 radome_height_m_agl: 5.0

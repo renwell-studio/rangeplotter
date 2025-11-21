@@ -5,12 +5,15 @@ from rich import print, progress
 from pathlib import Path
 from typing import Optional, List
 from rangeplotter.config.settings import Settings
-from rangeplotter.io.kml import parse_radars, extract_kml_styles
+from rangeplotter.io.kml import parse_radars, extract_kml_styles, parse_viewshed_kml
 from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.auth.cdse import CdseAuth
 from rangeplotter.utils.logging import setup_logging, log_memory_usage
+from rangeplotter.processing import clip_viewshed, union_viewsheds
+from rangeplotter.io.export import export_viewshed_kml
 import time
+import re
 
 app = typer.Typer(help="Radar LOS utility scaffold")
 
@@ -137,7 +140,7 @@ def debug_auth_dem(
     typer.echo("Access token acquired (not shown). Querying DEM...")
     dem_cache = Path(settings.cache_dir) / "dem_debug"
     dem_client = DemClient(base_url=settings.copernicus_api.base_url, auth=auth, cache_dir=dem_cache)
-    from visibility.geo.earth import mutual_horizon_distance
+    from rangeplotter.geo.earth import mutual_horizon_distance
     horizon = mutual_horizon_distance(5.0, max(settings.effective_altitudes), r.latitude, settings.atmospheric_k_factor)
     bbox = approximate_bounding_box(r.longitude, r.latitude, horizon * 0.1)  # smaller for test
     typer.echo(f"Requesting tiles for bbox={bbox}")
@@ -466,88 +469,126 @@ def viewshed(
     print(f"  - DEM Download time: {dem_client.total_download_time:.1f}s")
     print(f"  - Processing time: {total_time - dem_client.total_download_time:.1f}s")
 
-@app.command("detection-range")
+@app.command()
 def detection_range(
-    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Path = typer.Option(..., "--input", "-i", help="Path to viewshed KML file or directory"),
-    max_range_km: float = typer.Option(..., "--range", "-r", help="Maximum detection range in kilometers"),
-    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level")
+    input_files: List[Path] = typer.Option(..., "--input", "-i", help="Input viewshed KML files"),
+    ranges: List[float] = typer.Option(..., "--range", "-r", help="Detection ranges in km"),
+    output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
+    output_dir: Path = typer.Option(Path("output/detection_range"), "--output", "-o", help="Output directory"),
 ):
     """
-    Clip existing viewshed KMLs to a maximum detection range and append the result to the same file.
+    Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
-    from rangeplotter.io.kml import parse_viewshed_kml, add_polygon_to_kml
-    from rangeplotter.geo.geometry import create_geodesic_circle
-    from shapely.geometry import Polygon, MultiPolygon
-    
-    # Load settings to ensure we respect style config if needed (though we mostly reuse existing styles)
-    settings = Settings.from_file(config)
-    
-    # Resolve inputs
-    files = []
-    if input_path.is_dir():
-        files = list(input_path.glob("*.kml"))
-    else:
-        files = [input_path]
-        
-    if not files:
-        typer.echo("[red]No KML files found.[/red]")
+    if not input_files:
+        typer.echo("[red]No input files provided.[/red]")
         raise typer.Exit(code=1)
+
+    # Parse inputs
+    parsed_data = []
+    for kml_file in input_files:
+        if not kml_file.exists():
+            typer.echo(f"[yellow]Warning: File {kml_file} not found.[/yellow]")
+            continue
         
+        # Extract altitude from filename
+        match = re.search(r"tgt_alt_([\d.]+)m", kml_file.name)
+        if not match:
+            typer.echo(f"[yellow]Warning: Could not extract altitude from filename {kml_file.name}. Skipping.[/yellow]")
+            continue
+        altitude = float(match.group(1))
+        
+        # Parse KML
+        results = parse_viewshed_kml(str(kml_file))
+        for res in results:
+            parsed_data.append({
+                'file': kml_file,
+                'altitude': altitude,
+                'sensor': res['sensor'],
+                'viewshed': res['viewshed'],
+                'name': res.get('folder_name') or kml_file.stem
+            })
+
+    if not parsed_data:
+        typer.echo("[red]No valid data found in input files.[/red]")
+        raise typer.Exit(code=1)
+
+    # Group by Altitude
+    by_altitude = {}
+    for item in parsed_data:
+        alt = item['altitude']
+        if alt not in by_altitude:
+            by_altitude[alt] = []
+        by_altitude[alt].append(item)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Process
     with progress.Progress(
         progress.SpinnerColumn(),
         progress.TextColumn("[progress.description]{task.description}"),
-        progress.BarColumn(),
-        progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        transient=True,
     ) as prog:
-        task = prog.add_task("Clipping viewsheds...", total=len(files))
+        # Total tasks = altitudes * ranges
+        total_steps = len(by_altitude) * len(ranges)
+        task = prog.add_task("Processing detection ranges...", total=total_steps)
         
-        for f in files:
-            prog.update(task, description=f"Processing {f.name}...")
-            try:
-                # Parse - now returns a list of dicts
-                results = parse_viewshed_kml(str(f))
+        for alt, items in by_altitude.items():
+            for rng in ranges:
+                prog.update(task, description=f"Processing Alt: {alt}m, Range: {rng}km")
                 
-                if not results:
-                    if verbose >= 1:
-                        print(f"[yellow]Skipping {f.name}: Could not find any sensor locations or viewshed polygons.[/yellow]")
+                clipped_polys = []
+                
+                for item in items:
+                    clipped = clip_viewshed(item['viewshed'], item['sensor'], rng)
+                    if not clipped.is_empty:
+                        clipped_polys.append(clipped)
+                
+                if not clipped_polys:
                     prog.advance(task)
                     continue
                 
-                for res in results:
-                    sensor_loc = res['sensor']
-                    viewshed_poly = res['viewshed']
-                    folder_name = res['folder_name']
-                    
-                    if not sensor_loc or not viewshed_poly:
-                        continue
-
-                    # Create range circle
-                    circle = create_geodesic_circle(sensor_loc[0], sensor_loc[1], max_range_km)
-                    
-                    # Intersect
-                    clipped_poly = viewshed_poly.intersection(circle)
-                    
-                    if clipped_poly.is_empty:
-                        if verbose >= 1:
-                            print(f"[yellow]Warning: {f.name} ({folder_name}) resulted in empty polygon after clipping.[/yellow]")
-                        continue
-                    
-                    # Append to existing file
-                    name = f"{max_range_km}km detection zone"
-                    # Use #defaultPolyStyle which is what export_combined_kml uses
-                    if isinstance(clipped_poly, (Polygon, MultiPolygon)):
-                        add_polygon_to_kml(str(f), clipped_poly, name, style_url="#defaultPolyStyle", folder_name=folder_name)
+                final_poly = union_viewsheds(clipped_polys)
                 
-            except Exception as e:
-                print(f"[red]Error processing {f.name}: {e}[/red]")
-                if verbose >= 2:
-                    import traceback
-                    traceback.print_exc()
-            
-            prog.advance(task)
-            
-    print(f"[green]Processing complete. Files updated in place.[/green]")
+                # Determine output name
+                if output_name:
+                    base_name = output_name
+                elif len(items) == 1:
+                    # Try to extract sensor name from filename
+                    # viewshed-(.*)-tgt_alt
+                    m_name = re.search(r"viewshed-(.*)-tgt_alt", items[0]['file'].name)
+                    if m_name:
+                        base_name = m_name.group(1)
+                    else:
+                        base_name = items[0]['name']
+                else:
+                    base_name = "Union"
+                
+                # Create specific output directory
+                specific_out_dir = output_dir / base_name
+                specific_out_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Construct filename
+                # visibility-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml
+                alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+                rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
+                filename = f"visibility-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
+                
+                export_viewshed_kml(
+                    viewshed_polygon=final_poly,
+                    sensor_location=items[0]['sensor'], # Use first sensor location
+                    output_path=specific_out_dir / filename,
+                    sensor_name=base_name,
+                    altitude=alt,
+                    style_config={
+                        "line_color": "#00FF00",
+                        "line_width": 2,
+                        "fill_color": "#00FF00",
+                        "fill_opacity": 0.3
+                    },
+                    filename_override=filename
+                )
+                
+                prog.advance(task)
 
 if __name__ == "__main__":
     app()

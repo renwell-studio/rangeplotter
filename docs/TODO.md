@@ -26,22 +26,30 @@
 - [x] review CPU usage - see if we can get the machine working harder.
 
 # Minor New Features
-- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
-- [ ] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
-- [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)
 - [ ] new feature - unions
-- [ ] get multiple site input and polygon unions working
+ - [ ] refine working file locations. Remove input/ and output/. Replace with working_files/ with input/ viewshed/ and detection_range/ as children
+ - [ ] change default styling of output kmls to follow config
+ - [ ] add detection range array to config for default behaviour
+ - [ ] allow use of /* to specify multiple input files
+ - [ ] outputs should not include placemarks - we already have this information in the original input file
+- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
+- [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
+- [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)
+- [x] get multiple site inputworking
 - [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
-- [ ] create basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
+- [x] create basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
 - [ ] have a way to do just one/some sites from an input list of many - is this necessary?
+- [ ] have a download only flag for viewshed to just get the files. Also a soft check function - see how much data will be required to download?
 
 # Minor refinements:
 - [ ] general review for deprecated/redundant code and commands
-- [ ] adjust commands so input flag assumes path is input/
 - [ ] make -h work as well as --help
 - [ ] have a line confirming that all required DEM tiles are available
-- [ ] CLI flag to specify which LOS ranges to do
+- [ ] CLI flag to specify which viewshed ranges to do (optional, to override config file)
 - [ ] revise explanatory text in viewshed --help to remove 'radar' terminology and specify that this produces a raw, geometric viewshed only
+- [ ] tidy up whether defaults such as output file locations are hardcoded or stored in config.yaml. We want all defaults to be kept (and editable in config.yaml), with this default referenced in --help, etc, but overridable by command line flags
+ - [ ] adjust commands so input flag assumes path is input/
+
 
 # Documentation:
 - [ ] user documentation to explain the primary workflow and behaviour: viewshed -> detection-range

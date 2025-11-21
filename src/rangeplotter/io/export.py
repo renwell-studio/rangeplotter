@@ -31,14 +31,21 @@ def export_viewshed_kml(
     output_path: Path,
     sensor_name: str,
     altitude: float,
-    style_config: dict
+    style_config: dict,
+    filename_override: Optional[str] = None
 ) -> None:
     """
     Export a viewshed to a self-contained KML file with sensor location and polygon.
     """
     alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
     safe_name = sensor_name.replace(" ", "_").replace("/", "-")
-    doc_name = f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
+    
+    if filename_override:
+        doc_name = filename_override
+        if doc_name.endswith(".kml"):
+            doc_name = doc_name[:-4]
+    else:
+        doc_name = f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
     
     line_color = style_config.get("line_color", "#FFA500")
     line_width = style_config.get("line_width", 2)

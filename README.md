@@ -42,13 +42,13 @@ The CLI supports several commands. Use `--help` for detailed information on any 
 ### Commands
 
 #### `horizon`
-Calculate the theoretical maximum geometric horizon (range rings) for each radar based on Earth curvature and atmospheric refraction.
+Calculate the theoretical maximum geometric horizon (range rings) for each sensor location based on Earth curvature and atmospheric refraction, but without terrain awareness.
 ```bash
 python -m rangeplotter.cli.main horizon -i input/radars.kml -o output/horizon
 ```
 
 #### `viewshed`
-Calculate the actual terrain-aware visibility for each radar using Copernicus GLO-30 DEM data.
+Calculate the actual terrain-aware visibility for each sensor location using Copernicus GLO-30 DEM data.
 ```bash
 python -m rangeplotter.cli.main viewshed -i input/radars.kml -o output/viewshed
 ```
