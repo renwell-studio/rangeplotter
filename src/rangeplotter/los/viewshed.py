@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import logging
 from pathlib import Path
-from typing import List, Tuple, Optional, Callable, Any
+from typing import List, Tuple, Optional, Callable, Any, cast
 
 import numpy as np
 import rasterio
@@ -63,7 +63,8 @@ def _build_vrt(dem_paths: List[Path]) -> str:
             max_x = max(max_x, b.right)
             max_y = max(max_y, b.top)
             
-            if res_x is None:
+            # Pick the highest resolution (smallest pixel size)
+            if res_x is None or abs(t.a) < abs(res_x):
                 res_x = t.a
                 res_y = t.e # Usually negative
                 nodata = src.nodata
@@ -116,11 +117,18 @@ def _build_vrt(dem_paths: List[Path]) -> str:
             dst_x_off = int(round((src_left - min_x) / res_x))
             dst_y_off = int(round((max_y - src_top) / abs(res_y)))
             
+            # Calculate DstRect size based on resolution ratio
+            src_res_x = s['transform'].a
+            src_res_y = s['transform'].e
+            
+            dst_w = int(round(s['width'] * (src_res_x / res_x)))
+            dst_h = int(round(s['height'] * (abs(src_res_y) / abs(res_y))))
+            
             f.write('    <SimpleSource>\n')
             f.write(f'      <SourceFilename relativeToVRT="0">{s["path"]}</SourceFilename>\n')
             f.write('      <SourceBand>1</SourceBand>\n')
             f.write(f'      <SrcRect xOff="0" yOff="0" xSize="{s["width"]}" ySize="{s["height"]}" />\n')
-            f.write(f'      <DstRect xOff="{dst_x_off}" yOff="{dst_y_off}" xSize="{s["width"]}" ySize="{s["height"]}" />\n')
+            f.write(f'      <DstRect xOff="{dst_x_off}" yOff="{dst_y_off}" xSize="{dst_w}" ySize="{dst_h}" />\n')
             f.write('    </SimpleSource>\n')
             
         f.write('  </VRTRasterBand>\n')
@@ -265,8 +273,26 @@ def _radial_sweep_visibility(
     # Calculate effective earth radius at this latitude
     R_eff = effective_earth_radius(center_lat_deg, k_factor)
     
+    log.debug(f"Radial Sweep Inputs: Radar H={radar_h_msl:.2f}m, Target H={target_h_msl:.2f}m, Max Radius={max_radius_m:.2f}m, R_eff={R_eff:.2f}m")
+
     height, width = dem_array.shape
     
+    # Check elevation at radar location
+    # Use the inverse transform properly
+    it = ~transform
+    # Center (0,0) in AEQD maps to (col, row)
+    center_col_float, center_row_float = it * (0, 0)
+    center_c = int(center_col_float)
+    center_r = int(center_row_float)
+    
+    if 0 <= center_c < width and 0 <= center_r < height:
+        center_elev = dem_array[center_r, center_c]
+        msg = f"Elevation at Radar Location (Grid Center): {center_elev:.2f}m. Radar H: {radar_h_msl:.2f}m. Delta: {radar_h_msl - center_elev:.2f}m"
+        log.warning(msg) # Force visibility
+        print(f"DEBUG: {msg}")
+    else:
+        log.warning(f"Radar location is outside DEM grid! Center: ({center_c}, {center_r}), Shape: ({width}, {height})")
+
     # 1. Setup Polar Grid
     # We use a dense set of radials to ensure coverage
     # Pixel size (approx)
@@ -283,7 +309,6 @@ def _radial_sweep_visibility(
     n_az = int(np.ceil(circumference / pixel_size))
     # Clamp to a reasonable maximum to prevent OOM on huge ranges, but 3600 is too low for 100km+
     # 120km radius -> 750km circ -> 30m pixel -> 25000 steps.
-    # Let's cap at 14400 (0.025 deg) which is decent compromise.
     n_az = min(n_az, 14400) 
     # Ensure even number for symmetry
     if n_az % 2 != 0:
@@ -398,6 +423,11 @@ def _radial_sweep_visibility(
         if progress_callback:
             progress_callback("Computing LOS", (az_end / n_az) * 100)
     
+    # Check if we found ANY visible pixels
+    visible_count = np.count_nonzero(visible_polar)
+    total_pixels = visible_polar.size
+    log.debug(f"Polar Visibility Stats: {visible_count} / {total_pixels} pixels visible ({visible_count/total_pixels*100:.2f}%)")
+
     # 3. Convert to Cartesian Mask (Chunked)
     # We want to create a boolean mask in the DEM grid space.
     # We iterate over blocks to save memory.
@@ -530,47 +560,157 @@ def compute_viewshed(
     use_disk_swap = res_cfg.get("use_disk_swap", True)
     max_ram_percent = res_cfg.get("max_ram_percent", 80.0)
     
-    # Determine resolution
-    dem_config = config.get('dem_processing', {})
-    threshold_km = dem_config.get('resolution_threshold_km', 100.0)
-    fine_res = dem_config.get('fine_resolution_m', 30.0)
-    coarse_res = dem_config.get('coarse_resolution_m', 90.0)
+    # Determine resolution using Multiscale config
+    ms_config = config.get('multiscale', {})
+    target_res = 30.0 # Default
     
-    target_res = fine_res
-    if (d_max / 1000.0) > threshold_km:
-        target_res = coarse_res
-        log.info(f"Radius {d_max/1000:.1f} km > {threshold_km} km. Using coarse DEM resolution: {target_res}m")
+    if ms_config.get('enable', True):
+        d_max_m = d_max
+        
+        # Check thresholds (furthest first)
+        if d_max_m > ms_config.get('far_m', 800000):
+            target_res = ms_config.get('res_far_m', 1000.0)
+            log.info(f"Radius {d_max_m/1000:.1f} km (Far Zone). Using resolution: {target_res}m")
+        elif d_max_m > ms_config.get('mid_m', 200000):
+            target_res = ms_config.get('res_mid_m', 120.0)
+            log.info(f"Radius {d_max_m/1000:.1f} km (Mid Zone). Using resolution: {target_res}m")
+        elif d_max_m > ms_config.get('near_m', 50000):
+            target_res = ms_config.get('res_near_m', 30.0)
+            log.info(f"Radius {d_max_m/1000:.1f} km (Near Zone). Using resolution: {target_res}m")
+        else:
+            target_res = ms_config.get('res_near_m', 30.0)
+            log.info(f"Radius {d_max_m/1000:.1f} km (Base Zone). Using resolution: {target_res}m")
+            
+    print(f"DEBUG: d_max={d_max:.2f}m, target_res={target_res}m")
     
-    t0 = time.perf_counter()
-    dem_array, transform = _reproject_dem_to_aeqd(
-        dem_paths, 
-        radar.longitude, 
-        radar.latitude, 
-        d_max,
-        target_resolution=target_res,
-        use_disk_swap=use_disk_swap,
-        max_ram_percent=max_ram_percent
-    )
-    t1 = time.perf_counter()
-    log.info(f"DEM Reprojection (Total) took {t1-t0:.2f}s")
-    log.debug(f"DEM Array shape: {dem_array.shape}, Size: {dem_array.nbytes / 1024 / 1024:.1f} MB")
+    # 2. Get DEM
+    if progress_callback:
+        progress_callback("Downloading DEM", 0)
+    bbox = approximate_bounding_box(radar.longitude, radar.latitude, d_max)
+    dem_paths = dem_client.ensure_tiles(bbox, progress=rich_progress)
     
-    # 4. Run Radial Sweep
-    log.debug("Running radial sweep...")
-    t_sweep_start = time.perf_counter()
-    poly_aeqd = _radial_sweep_visibility(
-        dem_array, 
-        transform, 
-        radar_h, 
-        target_alt_msl, 
-        d_max, 
-        radar.latitude, # Pass latitude for R_eff calculation
-        config.get("atmospheric_k_factor", 1.333),
-        max_ram_percent=max_ram_percent,
-        progress_callback=progress_callback
-    )
-    t_sweep_end = time.perf_counter()
-    log.info(f"Radial Sweep took {t_sweep_end - t_sweep_start:.2f}s")
+    # 3. Reproject
+    log.debug("Reprojecting DEM to AEQD...")
+    if progress_callback:
+        progress_callback("Reprojecting DEM", 0)
+    
+    # Extract resource config
+    res_cfg = config.get("resources", {})
+    use_disk_swap = res_cfg.get("use_disk_swap", True)
+    max_ram_percent = res_cfg.get("max_ram_percent", 80.0)
+    
+    # Determine resolution using Multiscale config
+    ms_config = config.get('multiscale', {})
+    
+    polygons_aeqd = []
+    
+    if not ms_config.get('enable', True):
+        # Legacy single-pass mode (force high res or use simple logic)
+        # For now, just treat as one big zone with near_res
+        zones = [(0.0, d_max, ms_config.get('res_near_m', 30.0))]
+    else:
+        # Define zones: (min_r, max_r, res)
+        # We ensure we cover up to d_max
+        near_m = ms_config.get('near_m', 50000)
+        mid_m = ms_config.get('mid_m', 200000)
+        far_m = ms_config.get('far_m', 800000)
+        
+        res_near = ms_config.get('res_near_m', 30.0)
+        res_mid = ms_config.get('res_mid_m', 120.0)
+        res_far = ms_config.get('res_far_m', 1000.0)
+        
+        zones = []
+        # Zone 1: 0 -> near
+        zones.append((0.0, near_m, res_near))
+        # Zone 2: near -> mid
+        zones.append((near_m, mid_m, res_mid))
+        # Zone 3: mid -> far (or d_max)
+        zones.append((mid_m, max(far_m, d_max), res_far))
+
+    # Process each zone
+    for i, (z_min, z_max, z_res) in enumerate(zones):
+        if d_max <= z_min:
+            continue
+            
+        # Effective max radius for this pass
+        pass_max_r = min(d_max, z_max)
+        
+        log.info(f"Processing Zone {i+1}: {z_min/1000:.1f}-{pass_max_r/1000:.1f} km @ {z_res}m resolution")
+        
+        if progress_callback:
+            progress_callback(f"Zone {i+1} ({z_res}m)", 0)
+
+        t0 = time.perf_counter()
+        dem_array, transform = _reproject_dem_to_aeqd(
+            dem_paths, 
+            radar.longitude, 
+            radar.latitude, 
+            pass_max_r,
+            target_resolution=z_res,
+            use_disk_swap=use_disk_swap,
+            max_ram_percent=max_ram_percent
+        )
+        t1 = time.perf_counter()
+        log.debug(f"Zone {i+1} Reprojection took {t1-t0:.2f}s. Grid: {dem_array.shape}")
+        log.debug(f"DEM Stats: Min={np.nanmin(dem_array):.2f}, Max={np.nanmax(dem_array):.2f}, Mean={np.nanmean(dem_array):.2f}")
+        
+        # Run Radial Sweep
+        t_sweep_start = time.perf_counter()
+        poly = _radial_sweep_visibility(
+            dem_array, 
+            transform, 
+            radar_h, 
+            target_alt_msl, 
+            pass_max_r, 
+            radar.latitude,
+            config.get("atmospheric_k_factor", 1.333),
+            max_ram_percent=max_ram_percent,
+            progress_callback=None # Don't spam progress for sub-steps
+        )
+        t_sweep_end = time.perf_counter()
+        log.debug(f"Zone {i+1} Sweep took {t_sweep_end - t_sweep_start:.2f}s")
+        
+        if poly.is_empty:
+            log.warning(f"Zone {i+1} produced an empty viewshed polygon.")
+        else:
+            log.debug(f"Zone {i+1} produced a valid polygon (Area: {poly.area:.1f})")
+
+        # Clip to annulus
+        # Create annulus in AEQD
+        center = Point(0, 0)
+        outer_circle = center.buffer(pass_max_r)
+        if z_min > 0:
+            inner_circle = center.buffer(z_min)
+            annulus = outer_circle.difference(inner_circle)
+        else:
+            annulus = outer_circle
+            
+        # Intersect viewshed with annulus
+        clipped_poly = poly.intersection(annulus)
+        
+        if not clipped_poly.is_empty:
+            log.debug(f"Zone {i+1} clipped polygon is valid (Area: {clipped_poly.area:.1f})")
+            polygons_aeqd.append(clipped_poly)
+        else:
+            log.warning(f"Zone {i+1} clipped polygon is empty.")
+            
+        # Cleanup
+        del dem_array, poly, clipped_poly
+        
+    # Union all zones
+    from shapely.ops import unary_union
+    log.info(f"Unioning {len(polygons_aeqd)} zone polygons...")
+    if not polygons_aeqd:
+        poly_aeqd = Polygon()
+    else:
+        poly_aeqd = unary_union(polygons_aeqd)
+    
+    if poly_aeqd.is_empty:
+        log.warning("Final AEQD polygon is empty.")
+    else:
+        log.info(f"Final AEQD polygon area: {poly_aeqd.area:.1f}")
+    
+    # 5. Reproject back to WGS84
     
     # 5. Reproject back to WGS84
     if progress_callback:
@@ -588,5 +728,5 @@ def compute_viewshed(
     t_vec_end = time.perf_counter()
     log.info(f"Vector Reprojection took {t_vec_end - t_vec_start:.2f}s")
     
-    return poly_wgs84
+    return cast(Polygon | MultiPolygon, poly_wgs84)
 

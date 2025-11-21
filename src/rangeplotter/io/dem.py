@@ -23,7 +23,7 @@ import shutil
 
 import requests
 import rasterio
-from shapely.geometry import box, Polygon
+from shapely.geometry import box, Polygon, Point
 from shapely import wkt
 from shapely.ops import unary_union
 from rich import print
@@ -227,40 +227,91 @@ class DemClient:
         return tiles
 
     def sample_elevation(self, lon: float, lat: float) -> float:
-        """Sample elevation (m) at lon/lat from the first available DEM tile.
+        """Sample elevation (m) at lon/lat from the best available DEM tile.
 
-        This is a minimal implementation that:
-        - Uses the first GeoTIFF or DTED in the cache directory.
-        - Assumes DEM is in geographic CRS (lon/lat, WGS84-like).
-        - Returns 0.0 if no tiles are available or sampling fails.
+        This implementation:
+        1. Checks index.json for tiles covering the point, prioritizing high-res (DT2/30m).
+        2. Fallback: Scans cache directory, prioritizing .dt2 files.
         """
-        try:
-            # Find any .tif, .dt2, .dt1 in cache_dir
-            files = list(self.cache_dir.glob("*.dt2")) + list(self.cache_dir.glob("*.dt1")) + list(self.cache_dir.glob("*.tif"))
-            for fpath in files:
-                if not fpath.exists() or fpath.stat().st_size == 0:
-                    continue
+        # Helper to sample from a dataset
+        def _sample_from_ds(ds, x, y):
+            try:
+                row, col = ds.index(x, y)
+                if 0 <= row < ds.height and 0 <= col < ds.width:
+                    val = ds.read(1)[row, col]
+                    # Filter nodata if possible, though usually handled by mask
+                    return float(val)
+            except Exception:
+                pass
+            return None
+
+        # 1. Try to find the best tile via index.json
+        idx = self._load_index()
+        candidates = []
+        point = Point(lon, lat)
+        
+        for pid, meta in idx.items():
+            footprint_raw = meta.get("footprint")
+            if not footprint_raw:
+                continue
+            try:
+                # Parse WKT: geography'SRID=4326;POLYGON ((...))'
+                if ";" in footprint_raw:
+                    wkt_str = footprint_raw.split(";", 1)[1].rstrip("'")
+                else:
+                    wkt_str = footprint_raw
+                
+                poly = wkt.loads(wkt_str)
+                if poly.contains(point):
+                    name = meta.get("name", "").lower()
+                    score = 0
+                    # Prioritize 30m (DT2) over 90m (DT1)
+                    if "dte_30" in name or "dt2" in name: 
+                        score = 3
+                    elif "dte_90" in name or "dt1" in name: 
+                        score = 2
+                    else: 
+                        score = 1
+                    candidates.append((score, pid))
+            except Exception:
+                continue
+        
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        
+        # Try to open candidates
+        for score, pid in candidates:
+            for ext in [".dt2", ".dt1", ".tif"]:
+                fpath = self.cache_dir / f"{pid}{ext}"
+                if fpath.exists():
+                    try:
+                        with rasterio.open(fpath) as ds:
+                            val = _sample_from_ds(ds, lon, lat)
+                            if val is not None:
+                                self._log(f"Sampled {val}m from {fpath.name} (Score: {score})", level=1)
+                                return val
+                    except Exception:
+                        pass
+
+        # 2. Fallback: Scan directory, prioritizing DT2
+        self._log("Index lookup failed or no file found; scanning cache directory...", level=1)
+        patterns = ["*.dt2", "*.dt1", "*.tif"]
+        for pattern in patterns:
+            # Use glob but check bounds before full read
+            for fpath in self.cache_dir.glob(pattern):
                 try:
                     with rasterio.open(fpath) as ds:
-                        # If dataset CRS is geographic, we can index by lon/lat directly
-                        if ds.crs and ds.crs.is_geographic:
-                            row, col = ds.index(lon, lat)
-                        else:
-                            # Fallback: assume geographic coordinates; this may be wrong but
-                            # keeps the function robust until proper reprojection is wired in.
-                            row, col = ds.index(lon, lat)
-                        if 0 <= row < ds.height and 0 <= col < ds.width:
-                            val = ds.read(1)[row, col]
-                            if val is not None:
-                                try:
-                                    return float(val)
-                                except Exception:
-                                    continue
-                except Exception as e:
-                    self._log(f"Failed to sample from {fpath.name}: {e}", is_error=True)
+                        # Check bounds first to avoid expensive reads
+                        if not (ds.bounds.left <= lon <= ds.bounds.right and ds.bounds.bottom <= lat <= ds.bounds.top):
+                            continue
+                            
+                        val = _sample_from_ds(ds, lon, lat)
+                        if val is not None:
+                            self._log(f"Sampled {val}m from {fpath.name} (Fallback scan)", level=1)
+                            return val
+                except Exception:
                     continue
-        except Exception as e:
-            self._log(f"Elevation sampling error: {e}", is_error=True)
+                    
         return 0.0
 
     def download_tile(self, tile: DemTile) -> Path:

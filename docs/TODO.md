@@ -30,7 +30,8 @@
  - next level - individual sites and union folder (this level only exists if necessary)
  - next level - max sensor ranges
  - next level - target altitudes
-- [ ] new feature - change target altitudes to agl throughout
+- [ ] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
+- [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)
 - [ ] new feature - unions
 - [ ] general review for deprecated/redundant code and commands
 - [ ] review CPU usage - see if we can get the machine working harder.

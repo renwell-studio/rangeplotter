@@ -16,7 +16,7 @@ cache_dir: "data_cache"
 # List of target altitudes in meters above Mean Sea Level (MSL).
 # Visibility will be calculated for each of these altitudes.
 # Default list: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
-altitudes_msl_m: [10, 1000, 10000]
+altitudes_msl_m: [500]
 
 # Height of the radar antenna (radome) above ground level (AGL) in meters.
 radome_height_m_agl: 5.0
@@ -114,14 +114,16 @@ vertical:
 multiscale:
   # Enable multiscale processing to vary resolution with distance.
   enable: true
+
+  # Experimentally, using multiscale with these settings (30m res to 20km radius, then 90m res beyond) gives 2 to 2.5x speedup with minimal accuracy loss.
   # Distance thresholds (in meters) for switching resolutions.
-  near_m: 50000
-  mid_m: 200000
+  near_m: 20000
+  mid_m: 100000
   far_m: 800000
   # Resolution (in meters) for each distance zone.
   res_near_m: 30
-  res_mid_m: 120
-  res_far_m: 1000
+  res_mid_m: 90
+  res_far_m: 90
 
 # -----------------------------------------------------------------------------
 # Copernicus Data Space Ecosystem (CDSE) API

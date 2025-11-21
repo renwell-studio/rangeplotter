@@ -10,6 +10,7 @@ src/rangeplotter/auth/cdse.py
 src/rangeplotter/cli/main.py
 src/rangeplotter/config/settings.py
 src/rangeplotter/geo/earth.py
+src/rangeplotter/geo/geometry.py
 src/rangeplotter/io/dem.py
 src/rangeplotter/io/export.py
 src/rangeplotter/io/kml.py
