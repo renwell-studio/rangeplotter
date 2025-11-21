@@ -50,6 +50,7 @@ def main(
 config_path = Path("config/config.yaml")
 default_input_dir = Path("working_files/input")
 default_viewshed_dir = Path("working_files/viewshed")
+default_horizon_dir = Path("working_files/horizon")
 default_detection_dir = Path("working_files/detection_range")
 
 if config_path.exists():
@@ -59,6 +60,7 @@ if config_path.exists():
             if c:
                 default_input_dir = Path(c.get("input_dir", default_input_dir))
                 default_viewshed_dir = Path(c.get("output_viewshed_dir", default_viewshed_dir))
+                default_horizon_dir = Path(c.get("output_horizon_dir", default_horizon_dir))
                 default_detection_dir = Path(c.get("output_detection_dir", default_detection_dir))
     except Exception:
         pass
@@ -197,7 +199,7 @@ def debug_auth_dem(
 def horizon(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
-    output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Override output directory"),
+    output_dir: Optional[Path] = typer.Option(default_horizon_dir, "--output", "-o", help="Override output directory"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -304,7 +306,7 @@ def horizon(
     if output_dir:
         out_path = output_dir
     else:
-        out_path = default_viewshed_dir
+        out_path = default_horizon_dir
 
     out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands

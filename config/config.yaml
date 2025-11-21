@@ -8,6 +8,9 @@ input_dir: "working_files/input"
 # Default output directory for viewshed results.
 output_viewshed_dir: "working_files/viewshed"
 
+# Default output directory for horizon results.
+output_horizon_dir: "working_files/horizon"
+
 # Default output directory for detection-range results.
 output_detection_dir: "working_files/detection_range"
 

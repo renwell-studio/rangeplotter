@@ -55,6 +55,7 @@ class CopernicusAPIConfig(BaseModel):
 class Settings(BaseModel):
     input_dir: str = "working_files/input"
     output_viewshed_dir: str = "working_files/viewshed"
+    output_horizon_dir: str = "working_files/horizon"
     output_detection_dir: str = "working_files/detection_range"
     cache_dir: str = "data_cache"
     altitudes_msl_m: List[float]
