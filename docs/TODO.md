@@ -14,7 +14,7 @@
 - [x] include a way to specify max range of interest (i.e. a shortcut for implying long range and short range radar capabilities without going through actual radar visibility calcs)
 - [x] tell me how long the total download time and computation time was
 - [x] fix output file naming to be meaningful
-- [x] get output file structure working inside the kml file so I can import the out structure
+- [x] get output file structure working inside the kml file so I can import the output structure
 - [x] make output kml inherit polygon style from input
 - [x] make detection-range function save output correctly
 - [x] fix double nested folders in imported kml
@@ -28,10 +28,11 @@
 # Minor New Features
 - [ ] new feature - unions
  - [ ] refine working file locations. Remove input/ and output/. Replace with working_files/ with input/ viewshed/ and detection_range/ as children
- - [ ] change default styling of output kmls to follow config
- - [ ] add detection range array to config for default behaviour
- - [ ] allow use of /* to specify multiple input files
- - [ ] update --help to include new usage notes
+ - [x] change default styling of output kmls to follow config
+ - [x] add detection range array to config for default behaviour
+ - [x] allow use of /* to specify multiple input files
+ - [x] update --help to include new usage notes
+ - [ ] sort out naming when using multiple input sites
 
 - [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
 - [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions

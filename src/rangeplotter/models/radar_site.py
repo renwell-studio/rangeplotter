@@ -13,6 +13,7 @@ class RadarSite:
     radome_height_agl_m: float = 5.0
     description: Optional[str] = None
     style_url: Optional[str] = None
+    style_config: Optional[dict] = None
 
     @property
     def radar_height_m_msl(self) -> Optional[float]:

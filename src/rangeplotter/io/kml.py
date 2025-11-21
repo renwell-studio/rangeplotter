@@ -11,6 +11,57 @@ ALTITUDE_MODES = {"clampToGround", "relativeToGround", "absolute"}
 def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSite]:
     tree = ET.parse(kml_path)
     root = tree.getroot()
+    
+    # Extract styles map
+    styles = {}
+    for style in root.findall(f".//{KML_NS}Style"):
+        style_id = style.get("id")
+        if style_id:
+            styles[f"#{style_id}"] = style
+
+    def extract_style_from_element(element, style_url=None):
+        """Extract style attributes from a Style element or styleUrl."""
+        style_el = None
+        if style_url and style_url in styles:
+            style_el = styles[style_url]
+        elif element is not None:
+            style_el = element.find(f"{KML_NS}Style")
+            
+        if style_el is None:
+            return {}
+            
+        config = {}
+        
+        # LineStyle
+        line_style = style_el.find(f"{KML_NS}LineStyle")
+        if line_style is not None:
+            color = line_style.find(f"{KML_NS}color")
+            width = line_style.find(f"{KML_NS}width")
+            if color is not None and color.text:
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    config["line_color"] = f"#{rr}{gg}{bb}"
+            if width is not None and width.text:
+                try:
+                    config["line_width"] = float(width.text)
+                except ValueError:
+                    pass
+                    
+        # PolyStyle
+        poly_style = style_el.find(f"{KML_NS}PolyStyle")
+        if poly_style is not None:
+            color = poly_style.find(f"{KML_NS}color")
+            fill = poly_style.find(f"{KML_NS}fill")
+            if color is not None and color.text:
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    config["fill_color"] = f"#{rr}{gg}{bb}"
+                    config["fill_opacity"] = int(aa, 16) / 255.0
+            
+        return config
+
     radars: List[RadarSite] = []
     for pm in root.findall(f".//{KML_NS}Placemark"):
         name_el = pm.find(f"{KML_NS}name")
@@ -21,6 +72,9 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
         
         style_url_el = pm.find(f"{KML_NS}styleUrl")
         style_url = style_url_el.text.strip() if style_url_el is not None and style_url_el.text else None
+        
+        # Extract style config
+        style_config = extract_style_from_element(pm, style_url)
 
         alt_mode_el = pm.find(f"{KML_NS}altitudeMode")
         altitude_mode = alt_mode_el.text.strip() if alt_mode_el is not None and alt_mode_el.text else "clampToGround"
@@ -50,6 +104,7 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
             radome_height_agl_m=default_radome_height_m,
             description=description,
             style_url=style_url,
+            style_config=style_config
         ))
     return radars
 

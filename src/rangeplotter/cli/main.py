@@ -438,13 +438,18 @@ def viewshed(
                         filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m.kml"
                         out_path = out_dir_path / filename
                         
+                        # Merge sensor style with default style
+                        final_style = settings.style.model_dump()
+                        if sensor.style_config:
+                            final_style.update(sensor.style_config)
+                        
                         export_viewshed_kml(
                             viewshed_polygon=poly,
                             sensor_location=(sensor.longitude, sensor.latitude),
                             output_path=out_path,
                             sensor_name=sensor.name,
                             altitude=alt,
-                            style_config=settings.style.model_dump()
+                            style_config=final_style
                         )
                         
                         if verbose >= 1:
@@ -473,7 +478,7 @@ def viewshed(
 def detection_range(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
     input_files: List[str] = typer.Option(..., "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
-    ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated)"),
+    ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(Path("output/detection_range"), "--output", "-o", help="Output directory"),
 ):
