@@ -24,8 +24,8 @@
  - next level - max sensor ranges
  - next level - target altitudes
 - [x] review CPU usage - see if we can get the machine working harder.
-
-# Minor New Features
+- [x] get multiple site input working
+- [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
 - [x] new feature - unions
  - [x] refine working file locations. Remove input/ and output/. Replace with working_files/ with input/ viewshed/ and detection_range/ as children
  - [x] change default styling of output kmls to follow config
@@ -34,33 +34,38 @@
  - [x] update --help to include new usage notes
  - [x] sort out naming when using multiple input sites
  - [x] why do I need to use "" to enclose input path when using wildcards?
-
-- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
-- [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
-- [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)
-- [x] get multiple site inputworking
-- [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
 - [x] create basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
-- [ ] have a way to do just one/some sites from an input list of many - is this necessary?
+- [x] revise explanatory text in viewshed --help to remove 'radar' terminology and specify that this produces a raw, geometric viewshed only
+- [x] tidy up whether defaults such as output file locations are hardcoded or stored in config.yaml. We want all defaults to be kept (and editable in config.yaml), with this default referenced in --help, etc, but overridable by command line flags
+
+# Minor New Features
 - [ ] have a download only flag for viewshed to just get the files. Also a soft check function - see how much data will be required to download?
+- [ ] new feature - change target altitudes to agl throughout (a user option to switch between msl and agl)- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through - maybe not necessary now, with improved computation speed and individual viewshed outputs?
+- [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
+- [ ] have a way to do just one/some sites from an input list of many - is this necessary?
+- [ ] include options to import/export other useful file types
 
 # Minor refinements:
 - [ ] general review for deprecated/redundant code and commands
 - [ ] make -h work as well as --help
 - [ ] have a line confirming that all required DEM tiles are available
 - [ ] CLI flag to specify which viewshed ranges to do (optional, to override config file)
-- [ ] revise explanatory text in viewshed --help to remove 'radar' terminology and specify that this produces a raw, geometric viewshed only
-- [ ] tidy up whether defaults such as output file locations are hardcoded or stored in config.yaml. We want all defaults to be kept (and editable in config.yaml), with this default referenced in --help, etc, but overridable by command line flags
- - [ ] adjust commands so input flag assumes path is input/
+- [ ] adjust commands so input flag assumes path is input/
 
-
-# Documentation:
+# README:
+- [ ] general overview and use cases
 - [ ] user documentation to explain the primary workflow and behaviour: viewshed -> detection-range
+- [ ] installation process
+- [ ] credential handling
+- [ ] config file
+- [ ] bugs/feature requests
+- [ ] credit/donations
+- [ ] license
 
 # Major New Features:
 - [ ] add functionality for true radar visibility (taking radar cross section, frequency, etc as inputs).
  - [x] or a simpler version that applies a max detection range for an array of target types, and superposes that onto a pre-calculated viewshed, to output a set of viewsheds for different target types, all at a given target altitude, and having only calculated that viewshed once.
- - [ ] does radar diffraction work horizontally as well? i.e. where a small, tall island causes a long thin 'shadow' behind, will the radar bem (and return) refract to allow observation behind it?
+ - [ ] does radar diffraction work horizontally as well? i.e. where a small, tall island causes a long thin 'shadow' behind, will the radar beam (and return) refract to allow observation behind it?
 - [ ] add functionality to create and visualise a 3d observed volume? Can google earth do this?
  - [ ] probably not directly, but could stack surfaces of difference colour/opacity to represent detections at different altitudes, etc.
  - [ ] ChatGPT says I can: create radar coverage “bubbles” modeled as a set of semi-transparent 3D meshes (.dae models)
@@ -69,9 +74,7 @@
 # For packaging:
 - [x] use git properly
 - [ ] make sure it behaves well on any CPU
-- [ ] add GPU processing?
 - [ ] package utility for download/installation as a snap(?)
 - [ ] ensure sensible --help, README and man files
 - [ ] set up sensible and secure credential handling
 - [ ] understand the technology/utility stack we are using. GDAL?
-- [ ] include options to import/export other useful file types
