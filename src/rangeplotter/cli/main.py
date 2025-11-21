@@ -394,6 +394,7 @@ def viewshed(
     
     # 1. Determine ground elevation for all radars (requires minimal DEM fetch)
     all_tiles_map = {}  # Track unique tiles for check mode
+    missing_local_tiles = []
 
     for r in radars:
         # We need the ground elevation to calculate the true radar height (MSL).
@@ -409,13 +410,15 @@ def viewshed(
                 all_tiles_map[t.id] = t
             
             # If we happen to have the tiles, we can sample elevation to get a better horizon estimate
-            all_present = all(t.local_path.exists() and t.local_path.stat().st_size > 0 for t in local_tiles)
-            if all_present and local_tiles:
+            missing_here = [t for t in local_tiles if not (t.local_path.exists() and t.local_path.stat().st_size > 0)]
+            
+            if not missing_here and local_tiles:
                 r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
                 if verbose >= 1:
                     print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL (Cached)")
             else:
                 # Fallback if missing
+                missing_local_tiles.extend(missing_here)
                 r.ground_elevation_m_msl = 0.0
                 if verbose >= 1:
                     print(f"    [yellow]![/yellow] Local tile missing. Assuming 0m MSL for horizon check.")
@@ -425,6 +428,31 @@ def viewshed(
             r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
             if verbose >= 1:
                 print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+
+    # Interactive check for missing local tiles
+    local_tiles_fixed = False
+    if check_download and missing_local_tiles:
+        print(f"\n[yellow]Warning: {len(missing_local_tiles)} local DEM tiles are missing.[/yellow]")
+        print("Ground elevation cannot be determined, so horizon calculations will be inaccurate (using 0m MSL).")
+        
+        if typer.confirm("Would you like to download these local tiles now to improve accuracy?"):
+            print("[bold blue]Downloading local tiles...[/bold blue]")
+            # Deduplicate based on ID
+            unique_missing = {t.id: t for t in missing_local_tiles}.values()
+            
+            for t in unique_missing:
+                try:
+                    dem_client.download_tile(t)
+                except Exception as e:
+                    print(f"[red]Failed to download {t.id}: {e}[/red]")
+            
+            # Re-sample elevations
+            print("[bold blue]Re-sampling ground elevations...[/bold blue]")
+            for r in radars:
+                r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
+                if verbose >= 1:
+                     print(f"  [cyan]•[/cyan] {r.name}: {r.ground_elevation_m_msl:.1f} m MSL")
+            local_tiles_fixed = True
 
     # 2. Ensure full DEM coverage for the maximum possible range
     # Now that we have ground elevations, we can calculate the true horizon distance.
@@ -460,7 +488,7 @@ def viewshed(
         print(f"  To download:          {len(to_download)}")
         print(f"  Est. download size:   ~{est_size_mb:.1f} MB")
         
-        if len(to_download) > 0:
+        if missing_local_tiles and not local_tiles_fixed:
              print(f"[yellow]Note: Some local tiles are missing. Horizon calculation used 0m MSL fallback where necessary.[/yellow]")
 
         raise typer.Exit()
