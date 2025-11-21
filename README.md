@@ -14,6 +14,21 @@ python -m rangeplotter.cli.main horizon --input input/radars_sample.kml
 python -m rangeplotter.cli.main viewshed --input input/radars_sample.kml
 ```
 
+## Workflow
+
+### 1. Viewshed Calculation (`viewshed`)
+The `viewshed` command performs the computationally intensive work of calculating geometric visibility. It determines the line-of-sight from a static sensor location to a target at a specific altitude (or set of altitudes), accounting for:
+- Earth curvature
+- Atmospheric refraction (k-factor)
+- Terrain obstructions (using Copernicus GLO-30 DEM data)
+
+**Output:**
+This command generates "raw" viewshed polygons. Each output is a standalone KML file representing the visibility for **one sensor** at **one target altitude**.
+- **Location:** `output/viewshed/` (default)
+- **Naming:** `viewshed-[sensor_name]-tgt_alt_[altitude]m.kml`
+
+These files are intended to be the foundational building blocks for further analysis or visualization. They are saved individually to allow for efficient caching and reprocessing without re-running the expensive visibility calculation.
+
 ## Usage
 
 The CLI supports several commands. Use `--help` for detailed information on any command.

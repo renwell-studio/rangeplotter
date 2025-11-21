@@ -41,6 +41,7 @@
 - [ ] make -h work as well as --help
 - [ ] have a line confirming that all required DEM tiles are available
 - [ ] CLI flag to specify which LOS ranges to do
+- [ ] revise explanatory text in viewshed --help to remove 'radar' terminology and specify that this produces a raw, geometric viewshed only
 
 # Documentation:
 - [ ] user documentation to explain the primary workflow and behaviour: viewshed -> detection-range

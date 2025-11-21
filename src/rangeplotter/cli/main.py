@@ -269,18 +269,21 @@ def horizon(
 @app.command()
 def viewshed(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(None, "--input", "-i", help="Path to radar KML file or directory"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Optional. By default files are saved to output/viewshed/"),
+    input_path: Optional[Path] = typer.Option(Path("input/"), "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
+    output_dir: Optional[Path] = typer.Option(Path("output/viewshed/"), "--output", "-o", help="Path to output directory"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
-    Calculate the actual terrain-aware visibility (viewshed) for each radar.
+    Calculate the actual terrain-aware visibility (viewshed) for each sensor.
     
     This command downloads Copernicus GLO-30 DEM data and performs a radial sweep 
     Line-of-Sight (LOS) calculation, accounting for Earth curvature, refraction, 
     and terrain obstructions.
 
-    Outputs are saved as individual KML files per site and altitude.
+    It produces a raw, geometric viewshed representing the area visible from a static
+    sensor location to a target at a specified altitude (or set of altitudes).
+
+    Outputs are saved as individual KML files per site and target altitude.
     """
     start_time = time.time()
     settings = Settings.from_file(config)
