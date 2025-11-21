@@ -14,7 +14,7 @@ from typing import List, Tuple, Optional, Callable, Any
 
 import numpy as np
 import rasterio
-from rasterio.merge import merge
+# from rasterio.merge import merge # No longer used
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from rasterio.io import MemoryFile
 from shapely.geometry import Polygon, Point, MultiPolygon
@@ -31,6 +31,101 @@ import tempfile
 import os
 import psutil
 
+def _build_vrt(dem_paths: List[Path]) -> str:
+    """
+    Builds a VRT (Virtual Dataset) XML for the given DEM paths.
+    Returns the path to the temporary VRT file.
+    """
+    # 1. Scan files to determine global bounds and resolution
+    min_x, min_y = float('inf'), float('inf')
+    max_x, max_y = float('-inf'), float('-inf')
+    
+    res_x, res_y = None, None
+    nodata = None
+    crs_wkt = None
+    
+    sources = []
+    
+    # We need to open files to get their metadata.
+    # This is fast as we only read the header.
+    for p in dem_paths:
+        with rasterio.open(p) as src:
+            t = src.transform
+            w, h = src.width, src.height
+            
+            # Update bounds
+            # bounds property is (left, bottom, right, top)
+            b = src.bounds
+            min_x = min(min_x, b.left)
+            min_y = min(min_y, b.bottom)
+            max_x = max(max_x, b.right)
+            max_y = max(max_y, b.top)
+            
+            if res_x is None:
+                res_x = t.a
+                res_y = t.e # Usually negative
+                nodata = src.nodata
+                crs_wkt = src.crs.wkt
+            
+            sources.append({
+                'path': str(p.absolute()),
+                'width': w,
+                'height': h,
+                'transform': t
+            })
+            
+    # 2. Calculate VRT dimensions
+    # VRT GeoTransform: (min_x, res_x, 0, max_y, 0, res_y)
+    if res_x is None or res_y is None:
+        raise ValueError("Could not determine resolution from DEM files.")
+
+    # Ensure res_y is negative for standard north-up images
+    if res_y > 0:
+        # If positive, it means y increases upwards (Cartesian). 
+        # But usually rasterio/GDAL uses top-left origin with negative y-res.
+        # We'll assume standard top-left for VRT construction.
+        pass 
+    
+    vrt_width = int(round((max_x - min_x) / res_x))
+    # height = (top - bottom) / pixel_height
+    # If res_y is negative, pixel_height is -res_y
+    vrt_height = int(round((max_y - min_y) / abs(res_y)))
+    
+    # 3. Generate XML
+    fd, vrt_path = tempfile.mkstemp(suffix=".vrt")
+    os.close(fd)
+    
+    with open(vrt_path, 'w') as f:
+        f.write(f'<VRTDataset rasterXSize="{vrt_width}" rasterYSize="{vrt_height}">\n')
+        f.write(f'  <SRS>{crs_wkt}</SRS>\n')
+        f.write(f'  <GeoTransform>{min_x}, {res_x}, 0.0, {max_y}, 0.0, {res_y}</GeoTransform>\n')
+        f.write(f'  <VRTRasterBand dataType="Float32" band="1">\n')
+        if nodata is not None:
+            f.write(f'    <NoDataValue>{nodata}</NoDataValue>\n')
+            
+        for s in sources:
+            # Calculate DstRect
+            # x_off = (src_left - vrt_left) / res_x
+            # y_off = (vrt_top - src_top) / -res_y (since y grows down in pixel coords)
+            
+            src_left = s['transform'].c
+            src_top = s['transform'].f
+            
+            dst_x_off = int(round((src_left - min_x) / res_x))
+            dst_y_off = int(round((max_y - src_top) / abs(res_y)))
+            
+            f.write('    <SimpleSource>\n')
+            f.write(f'      <SourceFilename relativeToVRT="0">{s["path"]}</SourceFilename>\n')
+            f.write('      <SourceBand>1</SourceBand>\n')
+            f.write(f'      <SrcRect xOff="0" yOff="0" xSize="{s["width"]}" ySize="{s["height"]}" />\n')
+            f.write(f'      <DstRect xOff="{dst_x_off}" yOff="{dst_y_off}" xSize="{s["width"]}" ySize="{s["height"]}" />\n')
+            f.write('    </SimpleSource>\n')
+            
+        f.write('  </VRTRasterBand>\n')
+        f.write('</VRTDataset>\n')
+        
+    return vrt_path
+
 def _reproject_dem_to_aeqd(
     dem_paths: List[Path],
     center_lon: float,
@@ -40,44 +135,20 @@ def _reproject_dem_to_aeqd(
     max_ram_percent: float = 80.0
 ) -> Tuple[np.ndarray, rasterio.Affine]:
     """
-    Merge DEM tiles and reproject to Azimuthal Equidistant (AEQD) centered on the radar.
+    Reproject DEM tiles to Azimuthal Equidistant (AEQD) centered on the radar.
+    Uses a VRT (Virtual Raster) to treat multiple tiles as a single source without loading them all.
     Returns the reprojected data (numpy array) and its affine transform.
     """
-    # 1. Merge tiles
     # Filter out non-existent paths
     valid_paths = [p for p in dem_paths if p.exists()]
     if not valid_paths:
-        raise FileNotFoundError("No valid DEM tiles found to merge.")
+        raise FileNotFoundError("No valid DEM tiles found.")
 
-    # Open datasets
-    src_files_to_close = []
-    src_datasets = []
-    try:
-        for p in valid_paths:
-            src = rasterio.open(p)
-            src_files_to_close.append(src)
-            src_datasets.append(src)
-
-        mosaic, out_trans = merge(src_datasets)
-        
-        # Get metadata from first source
-        src_meta = src_datasets[0].meta.copy()
-        src_meta.update({
-            "driver": "GTiff",
-            "height": mosaic.shape[1],
-            "width": mosaic.shape[2],
-            "transform": out_trans,
-            "crs": src_datasets[0].crs
-        })
-    finally:
-        for src in src_files_to_close:
-            src.close()
-
-    # 2. Define target CRS (AEQD)
+    # 1. Define target CRS (AEQD)
     # proj string for AEQD centered on radar
     dst_crs = f"+proj=aeqd +lat_0={center_lat} +lon_0={center_lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
 
-    # 3. Define target grid
+    # 2. Define target grid
     # We want a fixed grid centered on (0,0) covering max_radius_m
     # Use 30m resolution (approx GLO-30)
     target_res = 30.0
@@ -93,7 +164,7 @@ def _reproject_dem_to_aeqd(
     # y = extent - row * res
     dst_transform = rasterio.Affine(target_res, 0.0, -extent, 0.0, -target_res, extent)
 
-    # Create destination array filled with NaN
+    # 3. Allocate destination array
     # Check size: width * height * 4 bytes
     size_bytes = width * height * 4
     size_mb = size_bytes / 1024 / 1024
@@ -129,19 +200,30 @@ def _reproject_dem_to_aeqd(
     else:
         dst_array = np.full((1, height, width), np.nan, dtype=np.float32)
 
-    # Reproject
-    # Since reproject is blocking and doesn't support callbacks easily, we can't give granular progress.
-    # But we can at least ensure the caller knows we are starting.
-    reproject(
-        source=mosaic,
-        destination=dst_array,
-        src_transform=src_meta['transform'],
-        src_crs=src_meta['crs'],
-        dst_transform=dst_transform,
-        dst_crs=dst_crs,
-        resampling=Resampling.bilinear,
-        dst_nodata=np.nan
-    )
+    # 4. Reproject using VRT
+    # Build a VRT for the source files
+    vrt_path = _build_vrt(valid_paths)
+    log.debug(f"Created temporary VRT at {vrt_path}")
+    
+    try:
+        with rasterio.open(vrt_path) as src:
+            # Reproject from the VRT to the destination array
+            # This allows GDAL to handle the mosaicing and reading efficiently
+            reproject(
+                source=rasterio.band(src, 1),
+                destination=dst_array,
+                src_transform=src.transform,
+                src_crs=src.crs,
+                dst_transform=dst_transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.bilinear,
+                dst_nodata=np.nan,
+                num_threads=-1 # Use all available cores
+            )
+    finally:
+        # Cleanup VRT file
+        if os.path.exists(vrt_path):
+            os.remove(vrt_path)
 
     return dst_array[0], dst_transform
 
