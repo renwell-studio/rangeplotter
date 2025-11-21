@@ -17,6 +17,7 @@ import re
 import yaml
 
 app = typer.Typer(help="Radar LOS utility scaffold")
+print("RangePlotter by Renwell | Licence: MIT | Support: ko-fi.com/renwell")
 
 # Load defaults from config if available
 config_path = Path("config/config.yaml")
@@ -385,7 +386,6 @@ def viewshed(
 
     from rangeplotter.los.viewshed import compute_viewshed
     from rangeplotter.io.export import export_viewshed_kml
-    from rangeplotter.io.kml import extract_kml_styles
     
     if output_dir:
         # User specified output directory, use it directly
