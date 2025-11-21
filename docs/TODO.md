@@ -26,8 +26,8 @@
 - [x] review CPU usage - see if we can get the machine working harder.
 
 # Minor New Features
-- [ ] new feature - unions
- - [ ] refine working file locations. Remove input/ and output/. Replace with working_files/ with input/ viewshed/ and detection_range/ as children
+- [x] new feature - unions
+ - [x] refine working file locations. Remove input/ and output/. Replace with working_files/ with input/ viewshed/ and detection_range/ as children
  - [x] change default styling of output kmls to follow config
  - [x] add detection range array to config for default behaviour
  - [x] allow use of /* to specify multiple input files

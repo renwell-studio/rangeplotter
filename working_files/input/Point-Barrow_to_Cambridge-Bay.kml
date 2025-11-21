@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document>
+	<name>Point-Barrow_to_Cambridge-Bay.kml</name>
+	<StyleMap id="m_ylw-pushpin08">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin112</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl12</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="m_ylw-pushpin080">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin1120</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl123</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="m_ylw-pushpin0800">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin11200</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl1230</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="s_ylw-pushpin112">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin1120">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin11200">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl12">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<scale>1.18182</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl123">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<scale>1.18182</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl1230">
+		<IconStyle>
+			<color>ff00aaff</color>
+			<scale>1.18182</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+	</Style>
+	<Folder>
+		<name>Point Barrow to Cambridge Bay</name>
+		<open>1</open>
+		<Placemark>
+			<name>Point Barrow LRR POW-M</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#POW-M">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin080</styleUrl>
+			<Point>
+				<coordinates>-156.636111111111,71.3272222222222,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Oliktok LRR POW-2</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#POW-2">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin0800</styleUrl>
+			<Point>
+				<coordinates>-149.889444444444,70.49833333333331,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Barter Island LRR BAR-M</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#BAR-M">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin08</styleUrl>
+			<Point>
+				<coordinates>-143.639166666667,70.13027777777781,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Shingle Point LRR BAR-2</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#BAR-2">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin0800</styleUrl>
+			<Point>
+				<coordinates>-137.260555555556,68.9227777777778,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Cape Parry LRR PIN-M</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#Horton_River">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin0800</styleUrl>
+			<Point>
+				<coordinates>-124.725,70.1713888888889,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Lady Franklin Point LRR PIN-3</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#cite_ref-cfs_3-5">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin0800</styleUrl>
+			<Point>
+				<coordinates>-113.225555555556,68.4791666666667,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Cambridge Bay LRR CAM-M</name>
+			<open>1</open>
+			<Snippet maxLines="0"></Snippet>
+			<description><![CDATA[<br>Source: Wikipedia article <a href="https://en.wikipedia.org/wiki/North_Warning_System#PIN-EB">North Warning System</a>]]></description>
+			<styleUrl>#m_ylw-pushpin0800</styleUrl>
+			<Point>
+				<coordinates>-105.118888888889,69.1161111111111,0</coordinates>
+			</Point>
+		</Placemark>
+		<atom:link rel="app" href="https://www.google.com/earth/about/versions/#earth-pro" title="Google Earth Pro 7.3.6.10441"></atom:link>
+	</Folder>
+</Document>
+</kml>

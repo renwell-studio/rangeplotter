@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Dewar Lakes LRR FOX-3 Viewshed @ 100m</name>
+    <Style id="sensorStyle">
+      <IconStyle>
+        <scale>1.0</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>
+      </IconStyle>
+    </Style>
+    <Style id="polyStyle">
+      <LineStyle>
+        <color>ff00A5FF</color>
+        <width>2</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>7f00A5FF</color>
+        <fill>1</fill>
+      </PolyStyle>
+    </Style>
+      <Placemark>
+        <name>Dewar Lakes LRR FOX-3</name>
+        <styleUrl>#sensorStyle</styleUrl>
+        <Point>
+          <coordinates>-71.2327777777778,68.6505555555556,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>viewshed-Dewar Lakes LRR FOX-3-tgt_alt_100m</name>
+        <styleUrl>#polyStyle</styleUrl>
+        <MultiGeometry>
+        </MultiGeometry>
+      </Placemark>
+  </Document>
+</kml>

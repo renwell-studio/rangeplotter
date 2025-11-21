@@ -2,13 +2,14 @@
 # RangePlotter Configuration
 # -----------------------------------------------------------------------------
 
-# Path to the input KML file containing radar locations.
-# Can be absolute or relative to the project root.
-# Is this still needed?
-radars_kml: "input/radars_sample.kml"
+# Default input directory for KML files containing sensor locations.
+input_dir: "working_files/input"
 
-# Directory where output files (KML/KMZ) will be saved.
-output_dir: "output"
+# Default output directory for viewshed results.
+output_viewshed_dir: "working_files/viewshed"
+
+# Default output directory for detection-range results.
+output_detection_dir: "working_files/detection_range"
 
 # Directory for caching downloaded DEM tiles and intermediate data.
 cache_dir: "data_cache"
@@ -19,7 +20,7 @@ cache_dir: "data_cache"
 # Example: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
 altitudes_msl_m: [1000]
 
-# Height of the radar antenna (radome) above ground level (AGL) in meters.
+# Height of the sensor above ground level (AGL) in meters.
 radome_height_m_agl: 5.0
 
 # Atmospheric refraction factor (k-factor).

@@ -14,14 +14,32 @@ from rangeplotter.processing import clip_viewshed, union_viewsheds
 from rangeplotter.io.export import export_viewshed_kml
 import time
 import re
+import yaml
 
 app = typer.Typer(help="Radar LOS utility scaffold")
+
+# Load defaults from config if available
+config_path = Path("config/config.yaml")
+default_input_dir = Path("working_files/input")
+default_viewshed_dir = Path("working_files/viewshed")
+default_detection_dir = Path("working_files/detection_range")
+
+if config_path.exists():
+    try:
+        with open(config_path) as f:
+            c = yaml.safe_load(f)
+            if c:
+                default_input_dir = Path(c.get("input_dir", default_input_dir))
+                default_viewshed_dir = Path(c.get("output_viewshed_dir", default_viewshed_dir))
+                default_detection_dir = Path(c.get("output_detection_dir", default_detection_dir))
+    except Exception:
+        pass
 
 def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
     """Resolve input path to a list of KML files."""
     if input_path is None:
-        # Default to input/ directory
-        input_dir = Path("input")
+        # Default to configured input directory
+        input_dir = default_input_dir
         if not input_dir.exists():
             return []
         return list(input_dir.glob("*.kml"))
@@ -70,7 +88,7 @@ def extract_refresh_token(
 @app.command()
 def prepare_dem(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(None, "--input", "-i", help="Path to radar KML file or directory"),
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
     limit: int = typer.Option(20, help="Max COP-DEM products per radar bbox")
 ):
     """Pre-fetch COP-DEM product metadata for each radar bounding box."""
@@ -107,7 +125,7 @@ def prepare_dem(
 @app.command()
 def debug_auth_dem(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(None, "--input", "-i", help="Path to radar KML file or directory")
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory")
 ):
     """Minimal auth+DEM test: get token and query a tiny bbox for first radar."""
     import faulthandler
@@ -150,8 +168,8 @@ def debug_auth_dem(
 @app.command()
 def horizon(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(None, "--input", "-i", help="Path to radar KML file or directory"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Override output directory"),
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
+    output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Override output directory"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -164,8 +182,8 @@ def horizon(
     import rangeplotter
     # print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
     settings = Settings.from_file(config)
-    if output_dir:
-        settings.output_dir = str(output_dir)
+    # if output_dir:
+    #     settings.output_dir = str(output_dir)
         
     from rich.console import Console
     console = Console()
@@ -254,10 +272,15 @@ def horizon(
             prog.advance(task)
     if verbose >= 2:
         print("[grey58]DEBUG: Horizon computation finished. Beginning export.")
-    output_dir = Path(settings.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    if output_dir:
+        out_path = output_dir
+    else:
+        out_path = default_viewshed_dir
+
+    out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
-    kml_path = output_dir / "horizons.kml"
+    kml_path = out_path / "horizons.kml"
     export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump())
     if verbose >= 2:
         print("[grey58]DEBUG: Export complete.")
@@ -272,8 +295,8 @@ def horizon(
 @app.command()
 def viewshed(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(Path("input/"), "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
-    output_dir: Optional[Path] = typer.Option(Path("output/viewshed/"), "--output", "-o", help="Path to output directory"),
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
+    output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -369,7 +392,7 @@ def viewshed(
         out_dir_path = Path(output_dir)
     else:
         # Default behavior: use config output_dir + /viewshed
-        out_dir_path = Path(settings.output_dir) / "viewshed"
+        out_dir_path = Path(settings.output_viewshed_dir)
         
     out_dir_path.mkdir(parents=True, exist_ok=True)
     
@@ -485,7 +508,7 @@ def detection_range(
     extra_files: Optional[List[str]] = typer.Argument(None, help="Additional input files (supports wildcards)"),
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
-    output_dir: Path = typer.Option(Path("output/detection_range"), "--output", "-o", help="Output directory"),
+    output_dir: Path = typer.Option(default_detection_dir, "--output", "-o", help="Output directory"),
 ):
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
