@@ -314,6 +314,23 @@ class DemClient:
                     
         return 0.0
 
+    def get_download_requirements(self, bbox: Tuple[float, float, float, float]) -> dict:
+        """
+        Return statistics about what needs to be downloaded for a given bbox.
+        Returns dict with: total_tiles, cached_count, download_count, est_size_mb, tiles (list of DemTile)
+        """
+        tiles = self.query_tiles(bbox, limit=100)
+        to_download = [t for t in tiles if not (t.local_path.exists() and t.local_path.stat().st_size > 0)]
+        already_downloaded = [t for t in tiles if (t.local_path.exists() and t.local_path.stat().st_size > 0)]
+        
+        return {
+            "total_tiles": len(tiles),
+            "cached_count": len(already_downloaded),
+            "download_count": len(to_download),
+            "est_size_mb": len(to_download) * 25.0,
+            "tiles": tiles
+        }
+
     def download_tile(self, tile: DemTile) -> Path:
         """Download a DEM product by ID into the cache directory if not present.
 
@@ -557,3 +574,4 @@ def approximate_bounding_box(lon: float, lat: float, radius_m: float) -> Tuple[f
 import math  # placed after function to avoid unused import ordering issues
 
 __all__ = ["DemClient", "DemTile", "approximate_bounding_box"]
+   

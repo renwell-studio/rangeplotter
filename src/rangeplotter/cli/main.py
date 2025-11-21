@@ -328,6 +328,8 @@ def viewshed(
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
+    download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
+    check_download: bool = typer.Option(False, "--check-download", "--check", help="Check download requirements without downloading full dataset."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -391,17 +393,38 @@ def viewshed(
         print("[bold blue]Initializing Radar Sites...[/bold blue]")
     
     # 1. Determine ground elevation for all radars (requires minimal DEM fetch)
+    all_tiles_map = {}  # Track unique tiles for check mode
+
     for r in radars:
         # We need the ground elevation to calculate the true radar height (MSL).
         # Fetch a small area around the radar (1km radius) to ensure we have the local tile.
         if verbose >= 1:
             print(f"  [cyan]•[/cyan] Sampling ground elevation for [bold]{r.name}[/bold]...")
         bbox_local = approximate_bounding_box(r.longitude, r.latitude, 1000)
-        dem_client.ensure_tiles(bbox_local)
         
-        r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
-        if verbose >= 1:
-            print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+        if check_download:
+            # In check mode, we query but do not download
+            local_tiles = dem_client.query_tiles(bbox_local)
+            for t in local_tiles:
+                all_tiles_map[t.id] = t
+            
+            # If we happen to have the tiles, we can sample elevation to get a better horizon estimate
+            all_present = all(t.local_path.exists() and t.local_path.stat().st_size > 0 for t in local_tiles)
+            if all_present and local_tiles:
+                r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
+                if verbose >= 1:
+                    print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL (Cached)")
+            else:
+                # Fallback if missing
+                r.ground_elevation_m_msl = 0.0
+                if verbose >= 1:
+                    print(f"    [yellow]![/yellow] Local tile missing. Assuming 0m MSL for horizon check.")
+        else:
+            # Normal mode: ensure tiles are present
+            dem_client.ensure_tiles(bbox_local)
+            r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
+            if verbose >= 1:
+                print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
 
     # 2. Ensure full DEM coverage for the maximum possible range
     # Now that we have ground elevations, we can calculate the true horizon distance.
@@ -410,6 +433,38 @@ def viewshed(
     max_target_alt = max(settings.effective_altitudes)
     from rangeplotter.geo.earth import mutual_horizon_distance
     
+    if check_download:
+        print("[bold]Checking download requirements...[/bold]")
+        # all_tiles_map already contains local tiles
+        for r in radars:
+            radar_h = r.radar_height_m_msl or 0.0
+            horizon_m = mutual_horizon_distance(radar_h, max_target_alt, r.latitude, settings.atmospheric_k_factor)
+            search_radius = horizon_m * 1.05
+            bbox_full = approximate_bounding_box(r.longitude, r.latitude, search_radius)
+            
+            # Use query_tiles directly to get objects, but don't download
+            # We use limit=100 as in ensure_tiles
+            tiles = dem_client.query_tiles(bbox_full, limit=100)
+            for t in tiles:
+                all_tiles_map[t.id] = t
+        
+        unique_tiles = list(all_tiles_map.values())
+        to_download = [t for t in unique_tiles if not (t.local_path.exists() and t.local_path.stat().st_size > 0)]
+        cached = [t for t in unique_tiles if (t.local_path.exists() and t.local_path.stat().st_size > 0)]
+        
+        est_size_mb = len(to_download) * 25.0
+        
+        print(f"\n[bold]Download Check Summary (All Sites):[/bold]")
+        print(f"  Total tiles required: {len(unique_tiles)}")
+        print(f"  Cached locally:       {len(cached)}")
+        print(f"  To download:          {len(to_download)}")
+        print(f"  Est. download size:   ~{est_size_mb:.1f} MB")
+        
+        if len(to_download) > 0:
+             print(f"[yellow]Note: Some local tiles are missing. Horizon calculation used 0m MSL fallback where necessary.[/yellow]")
+
+        raise typer.Exit()
+
     for r in radars:
         # Calculate max horizon based on radar height + max target altitude
         # radar_height_m_msl property now uses the sampled ground elevation
@@ -425,6 +480,10 @@ def viewshed(
         
         # This will download any missing tiles for the full range
         dem_client.ensure_tiles(bbox_full)
+
+    if download_only:
+        print("[green]Download complete. Skipping viewshed calculation.[/green]")
+        raise typer.Exit()
 
     from rangeplotter.los.viewshed import compute_viewshed
     from rangeplotter.io.export import export_viewshed_kml
