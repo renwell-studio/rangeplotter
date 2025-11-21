@@ -92,6 +92,7 @@ This approach bundles the Python interpreter, application code, and all dependen
 **Status**: **Implemented**.
 - PyInstaller spec file created and verified.
 - GitHub Actions workflow configured to build and release binaries on tags.
+- **Updated**: Release process now packages the binary in a ZIP archive with editable config and data folders.
 
 **Implementation Steps**:
 1.  **Dependency Analysis** (Done):
@@ -113,16 +114,18 @@ This approach bundles the Python interpreter, application code, and all dependen
 ### Feature: Portable Archive Release
 **Goal**: Repackage the application so that users can easily access and modify configuration files and input data without needing to rebuild the binary. The current single-file binary hides `config.yaml` and `working_files`, making it difficult for end-users to configure the tool.
 
+**Status**: **Implemented**.
+
 **Implementation Plan**:
 
-1.  **Configuration Loading Logic (`src/rangeplotter/config/settings.py`)**:
+1.  **Configuration Loading Logic (`src/rangeplotter/config/settings.py`)** (Done):
     *   Modify the `load_settings` (or equivalent) function to search for `config.yaml` in the following priority order:
         1.  **Current Working Directory**: `./config/config.yaml` (Priority 1 - User overrides).
         2.  **Executable Directory**: `{exe_dir}/config/config.yaml` (Priority 2 - Portable install).
         3.  **Internal Fallback**: The bundled default config (Priority 3 - Safety net).
     *   Ensure that default paths for `working_files`, `cache_dir`, etc., in the config are resolved relative to the *location of the config file* or the *executable*, rather than hardcoded absolute paths or internal temp directories.
 
-2.  **Release Artifact Structure**:
+2.  **Release Artifact Structure** (Done):
     *   Define the standard release format as a ZIP archive containing:
         ```text
         rangeplotter_vX.Y.Z/
@@ -137,7 +140,7 @@ This approach bundles the Python interpreter, application code, and all dependen
             └── ...
         ```
 
-3.  **Build Process Update**:
+3.  **Build Process Update** (Done):
     *   Update `docs/RELEASE_PROCESS.md` to include the steps for creating this archive.
     *   (Optional) Create a helper script `scripts/build_release.sh` to:
         1.  Run PyInstaller.
@@ -145,17 +148,17 @@ This approach bundles the Python interpreter, application code, and all dependen
         3.  Copy the binary, config, and readme.
         4.  Zip the result.
 
-4.  **Verification**:
+4.  **Verification** (Done):
     *   Test running the binary from a clean directory with an external `config/config.yaml`.
     *   Verify that changes to the external config (e.g., changing `output_dir`) are respected by the binary.
 
 ## 5. Documentation & Housekeeping
-    *   **Update README.md**:
+    *   **Update README.md** (Done):
         *   Revise the "Installation" section to reflect the new Zip archive format.
         *   Explain the directory structure (binary, config, working_files).
         *   Clarify that users should edit `config/config.yaml` to change settings.
-    *   **Update .gitignore**: Ensure the new release artifacts (zip files, release folders) are ignored.
-    *   **Clean up**: Remove any obsolete build artifacts or temporary files.
+    *   **Update .gitignore** (Done): Ensure the new release artifacts (zip files, release folders) are ignored.
+    *   **Clean up** (Done): Remove any obsolete build artifacts or temporary files.
 
 ## 7. Future Work
 - Union polygons across multiple radars.
