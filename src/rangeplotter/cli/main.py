@@ -325,6 +325,7 @@ def viewshed(
     config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
+    altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -341,8 +342,20 @@ def viewshed(
     """
     start_time = time.time()
     settings = Settings.from_file(config)
-    # if output_dir:
-    #     settings.output_dir = str(output_dir)
+    
+    # Override altitudes if provided via CLI
+    if altitudes_cli:
+        parsed_alts = []
+        for a_str in altitudes_cli:
+            parts = a_str.split(',')
+            for p in parts:
+                try:
+                    parsed_alts.append(float(p.strip()))
+                except ValueError:
+                    typer.echo(f"[yellow]Warning: Invalid altitude value '{p}'. Skipping.[/yellow]")
+        if parsed_alts:
+            settings.altitudes_msl_m = parsed_alts
+            typer.echo(f"Using target altitudes from CLI: {settings.altitudes_msl_m}")
         
     from rich.console import Console
     console = Console()
