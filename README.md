@@ -5,14 +5,36 @@ Prototype radar line-of-sight terrain visibility utility.
 ## Status
 Active development. Core LOS algorithms and DEM integration implemented.
 
-## Quick Start
-```bash
-# Calculate theoretical horizon (no terrain)
-python -m rangeplotter.cli.main horizon --input working_files/input/radars_sample.kml
+## Quick Start (End User)
+1.  **Download** the latest release for Linux from the [Releases page](https://github.com/renwell-studio/rangeplotter/releases).
+2.  **Make executable**:
+    ```bash
+    chmod +x rangeplotter
+    ```
+3.  **Run**:
+    ```bash
+    # Calculate theoretical horizon (no terrain)
+    ./rangeplotter horizon --input working_files/input/radars_sample.kml
 
-# Calculate terrain-aware viewshed
-python -m rangeplotter.cli.main viewshed --input working_files/input/radars_sample.kml
-```
+    # Calculate terrain-aware viewshed
+    ./rangeplotter viewshed --input working_files/input/radars_sample.kml
+    ```
+
+## Quick Start (Developer)
+1.  **Clone and Setup**:
+    ```bash
+    git clone https://github.com/renwell-studio/rangeplotter.git
+    cd rangeplotter
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
+2.  **Run via Python**:
+    ```bash
+    python -m rangeplotter.cli.main horizon --input working_files/input/radars_sample.kml
+    ```
+
+## Workflow
 
 ## Workflow
 
@@ -40,6 +62,8 @@ The `detection-range` command takes the raw viewsheds and clips them to a maximu
 
 The CLI supports several commands. Use `--help` for detailed information on any command.
 
+**Note:** The examples below assume you are using the standalone binary `./rangeplotter`. If you are a developer running from source, substitute `./rangeplotter` with `python -m rangeplotter.cli.main`.
+
 ### Common Flags
 - `--config`: Path to config YAML (default: `config/config.yaml`)
 - `--input` / `-i`: Path to radar KML file or directory containing KMLs (optional, defaults to `working_files/input`)
@@ -51,38 +75,38 @@ The CLI supports several commands. Use `--help` for detailed information on any 
 #### `horizon`
 Calculate the theoretical maximum geometric horizon (range rings) for each sensor location based on Earth curvature and atmospheric refraction, but without terrain awareness.
 ```bash
-python -m rangeplotter.cli.main horizon
+./rangeplotter horizon
 ```
 
 #### `viewshed`
 Calculate the actual terrain-aware visibility for each sensor location using Copernicus GLO-30 DEM data.
 ```bash
-python -m rangeplotter.cli.main viewshed
+./rangeplotter viewshed
 ```
 
 #### `detection-range`
 Clip viewsheds to maximum detection ranges and optionally union them.
 ```bash
 # Process all viewsheds in the default output directory
-python -m rangeplotter.cli.main detection-range --input working_files/viewshed/*.kml
+./rangeplotter detection-range --input working_files/viewshed/*.kml
 
 # Process specific files with a custom range
-python -m rangeplotter.cli.main detection-range --input "working_files/viewshed/MyRadar*.kml" --range 150
+./rangeplotter detection-range --input "working_files/viewshed/MyRadar*.kml" --range 150
 ```
 
 #### `prepare-dem`
 Pre-download DEM tiles for a given area to populate the cache.
 ```bash
-python -m rangeplotter.cli.main prepare-dem
+./rangeplotter prepare-dem
 ```
 
 #### `debug-auth-dem`
 Test authentication and DEM download capabilities.
 ```bash
-python -m rangeplotter.cli.main debug-auth-dem
+./rangeplotter debug-auth-dem
 ```
 
-## Environment Setup
+## Development Setup
 **CRITICAL:** Always ensure you are running inside the project's virtual environment to avoid dependency conflicts.
 
 1. Create and activate the virtual environment:

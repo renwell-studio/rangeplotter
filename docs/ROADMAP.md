@@ -89,14 +89,18 @@
 **Strategy**: **Standalone Binary via PyInstaller**.
 This approach bundles the Python interpreter, application code, and all dependencies (including GDAL/Rasterio) into a single executable file. Users can download it directly from GitHub Releases, make it executable, and run it.
 
+**Status**: **Implemented**.
+- PyInstaller spec file created and verified.
+- GitHub Actions workflow configured to build and release binaries on tags.
+
 **Implementation Steps**:
-1.  **Dependency Analysis**:
+1.  **Dependency Analysis** (Done):
     *   Verify `pyinstaller` compatibility with `rasterio` and `typer`.
     *   Identify necessary hidden imports and binary data (GDAL data files).
-2.  **Build Configuration**:
+2.  **Build Configuration** (Done):
     *   Create a `rangeplotter.spec` file to define the build process.
     *   Ensure `gdal-data` and `proj-data` are correctly bundled and environment variables are set at runtime.
-3.  **GitHub Actions Workflow**:
+3.  **GitHub Actions Workflow** (Done):
     *   Create a workflow `.github/workflows/build.yml` to automate the build on new tags.
     *   Step 1: Checkout code.
     *   Step 2: Install system dependencies (GDAL, etc.) on the runner.
