@@ -1,27 +1,20 @@
 
-# Functionality
+# Completed TODOs
 - [x] include logging so we know why it crashed - with a CLI flag to turn on/off, and a config file line
 - [x] centralise all user settings in a single, documented config file.
 - [x] have an overall -h flag to list the utilities I can call with an explanation of each
 - [x] update to viewshed terminology throughout
 - [x] revise the input and config flags to be more sensible
 - [x] remove the deprecated warning
-- [ ] include basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
-- [ ] have a way to do just one/some sites from an input list of many
-- [ ] CLI flag to specify which LOS ranges to do
 - [x] output verbosity
 - [x] improve meaningfulness of progress statements to command line
- - [ ] have a line confirming that all required DEM tiles are available
  - [x] remove repeated 'Computing viewshed' lines from output
  - [x] improve smoothness of LOS progress bar
 - [x] add altitude info to the output polys
-- [ ] include a way to specify max range of interest (i.e. a shortcut for implying long range and short range radar capabilities without going through actual radar visibility calcs)
+- [x] include a way to specify max range of interest (i.e. a shortcut for implying long range and short range radar capabilities without going through actual radar visibility calcs)
 - [x] tell me how long the total download time and computation time was
 - [x] fix output file naming to be meaningful
-- [ ] get multiple site input and polygon unions working
 - [x] get output file structure working inside the kml file so I can import the out structure
-- [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
-- [ ] make -h work as well as --help
 - [x] make output kml inherit polygon style from input
 - [x] make detection-range function save output correctly
 - [x] fix double nested folders in imported kml
@@ -30,16 +23,29 @@
  - next level - individual sites and union folder (this level only exists if necessary)
  - next level - max sensor ranges
  - next level - target altitudes
+- [x] review CPU usage - see if we can get the machine working harder.
+
+# Minor New Features
+- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
 - [ ] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
 - [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)
 - [ ] new feature - unions
+- [ ] get multiple site input and polygon unions working
+- [ ] get basic horizon rings output file naming and structure the same as 'viewshed' output
+- [ ] create basic utilities for poly management (e.g. doing unions, colour /shading changes etc.) without recalculating everything - call other functions, ideally
+- [ ] have a way to do just one/some sites from an input list of many - is this necessary?
+
+# Minor refinements:
 - [ ] general review for deprecated/redundant code and commands
-- [ ] review CPU usage - see if we can get the machine working harder.
-- [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
 - [ ] adjust commands so input flag assumes path is input/
+- [ ] make -h work as well as --help
+- [ ] have a line confirming that all required DEM tiles are available
+- [ ] CLI flag to specify which LOS ranges to do
+
+# Documentation:
 - [ ] user documentation to explain the primary workflow and behaviour: viewshed -> detection-range
 
-# Extended feature set:
+# Major New Features:
 - [ ] add functionality for true radar visibility (taking radar cross section, frequency, etc as inputs).
  - [x] or a simpler version that applies a max detection range for an array of target types, and superposes that onto a pre-calculated viewshed, to output a set of viewsheds for different target types, all at a given target altitude, and having only calculated that viewshed once.
  - [ ] does radar diffraction work horizontally as well? i.e. where a small, tall island causes a long thin 'shadow' behind, will the radar bem (and return) refract to allow observation behind it?

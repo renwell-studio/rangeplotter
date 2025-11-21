@@ -353,10 +353,10 @@ def viewshed(
         dem_client.ensure_tiles(bbox_full)
 
     from rangeplotter.los.viewshed import compute_viewshed
-    from rangeplotter.io.export import export_combined_kml
+    from rangeplotter.io.export import export_viewshed_kml
     from rangeplotter.io.kml import extract_kml_styles
     
-    output_dir = Path(settings.output_dir)
+    output_dir = Path(settings.output_dir) / "viewshed"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Map populated radars by location for easy lookup
@@ -384,8 +384,6 @@ def viewshed(
         
         for kml_file in kml_files:
             file_radars_raw = parse_radars(str(kml_file), settings.radome_height_m_agl)
-            file_styles = extract_kml_styles(str(kml_file))
-            file_radars_data = []
             
             for r_raw in file_radars_raw:
                 # Find the populated radar object (with elevation data)
@@ -396,7 +394,6 @@ def viewshed(
                     # print(f"Keys: {list(radar_map.keys())}")
                     continue
                 
-                viewsheds = {}
                 for alt in altitudes:
                     prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
                     calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
@@ -420,7 +417,24 @@ def viewshed(
                         
                         cfg_dict = settings.model_dump()
                         poly = compute_viewshed(sensor, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
-                        viewsheds[alt] = poly
+                        
+                        # Export individual KML
+                        safe_name = sensor.name.replace(" ", "_").replace("/", "-")
+                        alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+                        filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m.kml"
+                        out_path = output_dir / filename
+                        
+                        export_viewshed_kml(
+                            viewshed_polygon=poly,
+                            sensor_location=(sensor.longitude, sensor.latitude),
+                            output_path=out_path,
+                            sensor_name=sensor.name,
+                            altitude=alt,
+                            style_config=settings.style.model_dump()
+                        )
+                        
+                        if verbose >= 1:
+                            prog.console.print(f"    [green]Saved {filename}[/green]")
                         
                         if verbose >= 2:
                             log_memory_usage(log, f"After {sensor.name} @ {alt}m")
@@ -432,19 +446,6 @@ def viewshed(
                         prog.remove_task(calc_task)
                         current_step += 100
                         prog.update(overall_task, completed=current_step)
-                
-                file_radars_data.append({'radar': sensor, 'viewsheds': viewsheds})
-            
-            # Export combined KML for this file
-            if file_radars_data:
-                out_path = output_dir / kml_file.name
-                export_combined_kml(
-                    output_path=out_path,
-                    radars_data=file_radars_data,
-                    styles=file_styles,
-                    style_config=settings.style.model_dump(),
-                    document_name=kml_file.stem
-                )
             
     print("[green]Viewshed computation complete.[/green]")
     

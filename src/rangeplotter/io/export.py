@@ -36,6 +36,8 @@ def export_viewshed_kml(
     """
     Export a viewshed to a self-contained KML file with sensor location and polygon.
     """
+    alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
+    
     line_color = style_config.get("line_color", "#FFA500")
     line_width = style_config.get("line_width", 2)
     fill_color = style_config.get("fill_color", None)
@@ -53,7 +55,7 @@ def export_viewshed_kml(
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{sensor_name} Viewshed @ {altitude}m</name>',
+        f'    <name>{sensor_name} Viewshed @ {alt_str}m</name>',
         '    <Style id="sensorStyle">',
         '      <IconStyle>',
         '        <scale>1.0</scale>',
@@ -73,14 +75,14 @@ def export_viewshed_kml(
         # '    <Folder>',
         # f'      <name>{sensor_name} Data</name>',
         '      <Placemark>',
-        f'        <name>{sensor_name} Location</name>',
+        f'        <name>{sensor_name}</name>',
         '        <styleUrl>#sensorStyle</styleUrl>',
         '        <Point>',
         f'          <coordinates>{sensor_location[0]},{sensor_location[1]},0</coordinates>',
         '        </Point>',
         '      </Placemark>',
         '      <Placemark>',
-        f'        <name>Viewshed @ {altitude}m</name>',
+        f'        <name>viewshed-{sensor_name}-tgt_alt_{alt_str}m</name>',
         '        <styleUrl>#polyStyle</styleUrl>',
         '        <MultiGeometry>'
     ]
