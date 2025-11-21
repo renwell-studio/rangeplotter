@@ -31,7 +31,8 @@
  - [ ] change default styling of output kmls to follow config
  - [ ] add detection range array to config for default behaviour
  - [ ] allow use of /* to specify multiple input files
- - [ ] outputs should not include placemarks - we already have this information in the original input file
+ - [ ] update --help to include new usage notes
+
 - [ ] find a way to capture and save viewshed execution progress if we have to pause halfway through
 - [x] redo output structure to generate a set of independent raw viewshed kml files I can reuse later (these are the expensive part), then use 'detection-range' to build custom multi-part kmls and unions
 - [ ] new feature - change target altitudes to agl throughout (a user option to swithc between msl and agl)

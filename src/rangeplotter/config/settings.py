@@ -73,6 +73,7 @@ class Settings(BaseModel):
     multiscale: MultiscaleConfig = MultiscaleConfig()
     copernicus_api: CopernicusAPIConfig
     logging: dict = Field(default_factory=lambda: {"level": "INFO"})
+    detection_ranges: List[float] = []
 
     @field_validator("altitudes_msl_m")
     @classmethod

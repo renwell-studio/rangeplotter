@@ -45,6 +45,9 @@ export_format: "KML"
 # Number of decimal places for coordinates in the output.
 precision: 9
 
+# Default detection ranges to use if not specified in CLI.
+detection_ranges: []
+
 # -----------------------------------------------------------------------------
 # Visual Style Settings
 # -----------------------------------------------------------------------------

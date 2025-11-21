@@ -55,17 +55,72 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
 
 def parse_viewshed_kml(kml_path: str) -> List[dict]:
     """
-    Parse a viewshed KML file to extract sensor locations and viewshed polygons.
-    Returns a list of dicts: {'folder_name': str, 'sensor': (lon, lat), 'viewshed': geometry}
+    Parse a viewshed KML file to extract sensor locations, viewshed polygons, and styles.
+    Returns a list of dicts: {'folder_name': str, 'sensor': (lon, lat), 'viewshed': geometry, 'style': dict}
     """
     tree = ET.parse(kml_path)
     root = tree.getroot()
     
+    # Extract styles map
+    styles = {}
+    for style in root.findall(f".//{KML_NS}Style"):
+        style_id = style.get("id")
+        if style_id:
+            styles[f"#{style_id}"] = style
+            
+    def extract_style_from_element(element, style_url=None):
+        """Extract style attributes from a Style element or styleUrl."""
+        style_el = None
+        if style_url and style_url in styles:
+            style_el = styles[style_url]
+        elif element is not None:
+            style_el = element.find(f"{KML_NS}Style")
+            
+        if style_el is None:
+            return {}
+            
+        config = {}
+        
+        # LineStyle
+        line_style = style_el.find(f"{KML_NS}LineStyle")
+        if line_style is not None:
+            color = line_style.find(f"{KML_NS}color")
+            width = line_style.find(f"{KML_NS}width")
+            if color is not None and color.text:
+                # KML is aabbggrr, we want #RRGGBB
+                # But export expects hex string, let's just pass it through or convert?
+                # export.py expects #RRGGBB.
+                # KML: aabbggrr -> #rrggbb
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    config["line_color"] = f"#{rr}{gg}{bb}"
+            if width is not None and width.text:
+                try:
+                    config["line_width"] = float(width.text)
+                except ValueError:
+                    pass
+                    
+        # PolyStyle
+        poly_style = style_el.find(f"{KML_NS}PolyStyle")
+        if poly_style is not None:
+            color = poly_style.find(f"{KML_NS}color")
+            fill = poly_style.find(f"{KML_NS}fill")
+            if color is not None and color.text:
+                kml_color = color.text.strip()
+                if len(kml_color) == 8:
+                    aa, bb, gg, rr = kml_color[0:2], kml_color[2:4], kml_color[4:6], kml_color[6:8]
+                    config["fill_color"] = f"#{rr}{gg}{bb}"
+                    config["fill_opacity"] = int(aa, 16) / 255.0
+            
+        return config
+
     results = []
 
     def extract_from_element(element):
         sensor_loc = None
         viewshed_poly = None
+        style_config = {}
         
         # Find all Placemarks in this element context
         for pm in element.findall(f".//{KML_NS}Placemark"):
@@ -114,6 +169,11 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                 poly = pm.find(f"{KML_NS}Polygon")
                 multi = pm.find(f"{KML_NS}MultiGeometry")
                 
+                # Extract style
+                style_url = pm.find(f"{KML_NS}styleUrl")
+                s_url = style_url.text.strip() if style_url is not None else None
+                style_config = extract_style_from_element(pm, s_url)
+                
                 if poly is not None:
                     p = extract_polygon(poly)
                     if p:
@@ -127,7 +187,7 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
                     if polys:
                         viewshed_poly = MultiPolygon(polys)
         
-        return sensor_loc, viewshed_poly
+        return sensor_loc, viewshed_poly, style_config
 
     # Strategy: Look for Folders.
     folders = root.findall(f".//{KML_NS}Folder")
@@ -136,15 +196,15 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
         for folder in folders:
             name_el = folder.find(f"{KML_NS}name")
             folder_name = name_el.text.strip() if name_el is not None and name_el.text else None
-            sensor, viewshed = extract_from_element(folder)
+            sensor, viewshed, style = extract_from_element(folder)
             if sensor and viewshed:
-                results.append({'folder_name': folder_name, 'sensor': sensor, 'viewshed': viewshed})
+                results.append({'folder_name': folder_name, 'sensor': sensor, 'viewshed': viewshed, 'style': style})
     
     # If no results from folders, try the whole document (backward compatibility)
     if not results:
-        sensor, viewshed = extract_from_element(root)
+        sensor, viewshed, style = extract_from_element(root)
         if sensor and viewshed:
-             results.append({'folder_name': None, 'sensor': sensor, 'viewshed': viewshed})
+             results.append({'folder_name': None, 'sensor': sensor, 'viewshed': viewshed, 'style': style})
                         
     return results
 

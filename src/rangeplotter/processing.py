@@ -25,10 +25,26 @@ def clip_viewshed(viewshed: Union[Polygon, MultiPolygon], sensor_loc: Tuple[floa
     Clip the viewshed polygon with a geodesic buffer of the given radius.
     """
     buffer = create_geodesic_buffer(sensor_loc[0], sensor_loc[1], radius_km)
+    
+    # Ensure validity before intersection
     if not buffer.is_valid:
         buffer = buffer.buffer(0)
     
-    clipped = viewshed.intersection(buffer)
+    if not viewshed.is_valid:
+        viewshed = viewshed.buffer(0)
+        
+    try:
+        clipped = viewshed.intersection(buffer)
+    except Exception:
+        # Fallback for topology errors
+        # Try slightly buffering the viewshed to fix micro-self-intersections
+        try:
+            viewshed = viewshed.buffer(0.000001)
+            clipped = viewshed.intersection(buffer)
+        except Exception:
+             # If still failing, return empty or original (depending on desired behavior, but empty is safer)
+             return Polygon()
+
     return clipped
 
 def union_viewsheds(viewsheds: List[Union[Polygon, MultiPolygon]]) -> Union[Polygon, MultiPolygon]:

@@ -471,25 +471,70 @@ def viewshed(
 
 @app.command()
 def detection_range(
-    input_files: List[Path] = typer.Option(..., "--input", "-i", help="Input viewshed KML files"),
-    ranges: List[float] = typer.Option(..., "--range", "-r", help="Detection ranges in km"),
+    config: Path = typer.Option(Path("config/config.yaml"), "--config", help="Path to config YAML"),
+    input_files: List[str] = typer.Option(..., "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
+    ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated)"),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(Path("output/detection_range"), "--output", "-o", help="Output directory"),
 ):
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
-    if not input_files:
-        typer.echo("[red]No input files provided.[/red]")
+    settings = Settings.from_file(config)
+
+    # Resolve inputs (handle wildcards manually if shell didn't)
+    resolved_files = []
+    import glob
+    for inp in input_files:
+        # Check if it's a glob pattern
+        if "*" in inp or "?" in inp or "[" in inp:
+            matches = glob.glob(inp)
+            if not matches:
+                typer.echo(f"[yellow]Warning: No files matched pattern {inp}[/yellow]")
+            for m in matches:
+                p = Path(m)
+                if p.is_file():
+                    resolved_files.append(p)
+        else:
+            p = Path(inp)
+            if p.exists() and p.is_file():
+                resolved_files.append(p)
+            elif p.is_dir():
+                 # If user passed a dir, maybe they meant all kmls in it?
+                 # But standard behavior for --input file is usually strict.
+                 # Let's just warn if it's a dir and not a file.
+                 typer.echo(f"[yellow]Warning: {inp} is a directory. Skipping.[/yellow]")
+            else:
+                typer.echo(f"[yellow]Warning: File {inp} not found.[/yellow]")
+    
+    if not resolved_files:
+        typer.echo("[red]No valid input files provided.[/red]")
         raise typer.Exit(code=1)
+
+    # Resolve ranges
+    final_ranges = []
+    if ranges:
+        for r_str in ranges:
+            # Split by comma
+            parts = r_str.split(',')
+            for p in parts:
+                try:
+                    final_ranges.append(float(p.strip()))
+                except ValueError:
+                    typer.echo(f"[yellow]Warning: Invalid range value '{p}'. Skipping.[/yellow]")
+    
+    # Fallback to config
+    if not final_ranges:
+        if settings.detection_ranges:
+            final_ranges = settings.detection_ranges
+            typer.echo(f"Using default detection ranges from config: {final_ranges}")
+        else:
+            typer.echo("[red]No detection ranges provided via CLI or config.[/red]")
+            raise typer.Exit(code=1)
 
     # Parse inputs
     parsed_data = []
-    for kml_file in input_files:
-        if not kml_file.exists():
-            typer.echo(f"[yellow]Warning: File {kml_file} not found.[/yellow]")
-            continue
-        
+    for kml_file in resolved_files:
         # Extract altitude from filename
         match = re.search(r"tgt_alt_([\d.]+)m", kml_file.name)
         if not match:
@@ -505,6 +550,7 @@ def detection_range(
                 'altitude': altitude,
                 'sensor': res['sensor'],
                 'viewshed': res['viewshed'],
+                'style': res.get('style', {}),
                 'name': res.get('folder_name') or kml_file.stem
             })
 
@@ -529,14 +575,18 @@ def detection_range(
         transient=True,
     ) as prog:
         # Total tasks = altitudes * ranges
-        total_steps = len(by_altitude) * len(ranges)
+        total_steps = len(by_altitude) * len(final_ranges)
         task = prog.add_task("Processing detection ranges...", total=total_steps)
         
         for alt, items in by_altitude.items():
-            for rng in ranges:
+            for rng in final_ranges:
                 prog.update(task, description=f"Processing Alt: {alt}m, Range: {rng}km")
                 
                 clipped_polys = []
+                
+                # Collect styles to merge or pick one
+                # For union, we might just pick the first one or a default union style
+                # For single, we use the item's style
                 
                 for item in items:
                     clipped = clip_viewshed(item['viewshed'], item['sensor'], rng)
@@ -563,6 +613,18 @@ def detection_range(
                 else:
                     base_name = "Union"
                 
+                # Determine style
+                # If single item, use its style. If union, use first item's style or default?
+                # Let's use first item's style as base, but maybe ensure opacity is reasonable
+                style_to_use = items[0]['style'].copy()
+                if not style_to_use:
+                     style_to_use = {
+                        "line_color": "#00FF00",
+                        "line_width": 2,
+                        "fill_color": "#00FF00",
+                        "fill_opacity": 0.3
+                    }
+                
                 # Create specific output directory
                 specific_out_dir = output_dir / base_name
                 specific_out_dir.mkdir(parents=True, exist_ok=True)
@@ -579,12 +641,7 @@ def detection_range(
                     output_path=specific_out_dir / filename,
                     sensor_name=base_name,
                     altitude=alt,
-                    style_config={
-                        "line_color": "#00FF00",
-                        "line_width": 2,
-                        "fill_color": "#00FF00",
-                        "fill_opacity": 0.3
-                    },
+                    style_config=style_to_use,
                     filename_override=filename
                 )
                 
