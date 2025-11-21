@@ -83,7 +83,30 @@
     *   **Single Sensor**: `[name]` is the sensor site name.
     *   **Multi-Sensor**: `[name]` is the provided `--name` (e.g., "North_Network") or "Union".
 
-## 6. Future Work
+## 6. Packaging & Distribution
+**Goal**: Package the utility for easy distribution to Linux users without requiring them to manage Python environments or complex GDAL dependencies.
+
+**Strategy**: **Standalone Binary via PyInstaller**.
+This approach bundles the Python interpreter, application code, and all dependencies (including GDAL/Rasterio) into a single executable file. Users can download it directly from GitHub Releases, make it executable, and run it.
+
+**Implementation Steps**:
+1.  **Dependency Analysis**:
+    *   Verify `pyinstaller` compatibility with `rasterio` and `typer`.
+    *   Identify necessary hidden imports and binary data (GDAL data files).
+2.  **Build Configuration**:
+    *   Create a `rangeplotter.spec` file to define the build process.
+    *   Ensure `gdal-data` and `proj-data` are correctly bundled and environment variables are set at runtime.
+3.  **GitHub Actions Workflow**:
+    *   Create a workflow `.github/workflows/build.yml` to automate the build on new tags.
+    *   Step 1: Checkout code.
+    *   Step 2: Install system dependencies (GDAL, etc.) on the runner.
+    *   Step 3: Build binary with PyInstaller.
+    *   Step 4: Upload binary as a release asset.
+4.  **Snap Package (Secondary)**:
+    *   Once the binary build is stable, consider wrapping it in a `snap` for the Canonical Store.
+    *   Create `snap/snapcraft.yaml`.
+
+## 7. Future Work
 - Union polygons across multiple radars.
 - Advanced propagation modeling.
 - Web UI.
