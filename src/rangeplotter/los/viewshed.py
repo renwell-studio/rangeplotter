@@ -30,12 +30,14 @@ log = logging.getLogger(__name__)
 import tempfile
 import os
 import psutil
+import time
 
 def _build_vrt(dem_paths: List[Path]) -> str:
     """
     Builds a VRT (Virtual Dataset) XML for the given DEM paths.
     Returns the path to the temporary VRT file.
     """
+    t0 = time.perf_counter()
     # 1. Scan files to determine global bounds and resolution
     min_x, min_y = float('inf'), float('inf')
     max_x, max_y = float('-inf'), float('-inf')
@@ -123,7 +125,9 @@ def _build_vrt(dem_paths: List[Path]) -> str:
             
         f.write('  </VRTRasterBand>\n')
         f.write('</VRTDataset>\n')
-        
+    
+    t1 = time.perf_counter()
+    log.debug(f"VRT creation took {t1-t0:.4f}s")
     return vrt_path
 
 def _reproject_dem_to_aeqd(
@@ -131,6 +135,7 @@ def _reproject_dem_to_aeqd(
     center_lon: float,
     center_lat: float,
     max_radius_m: float,
+    target_resolution: float = 30.0,
     use_disk_swap: bool = True,
     max_ram_percent: float = 80.0
 ) -> Tuple[np.ndarray, rasterio.Affine]:
@@ -150,8 +155,8 @@ def _reproject_dem_to_aeqd(
 
     # 2. Define target grid
     # We want a fixed grid centered on (0,0) covering max_radius_m
-    # Use 30m resolution (approx GLO-30)
-    target_res = 30.0
+    # Use target_resolution (default 30m)
+    target_res = target_resolution
     extent = max_radius_m * 1.05 # 5% buffer
     
     # Ensure dimensions are integer
@@ -205,6 +210,7 @@ def _reproject_dem_to_aeqd(
     vrt_path = _build_vrt(valid_paths)
     log.debug(f"Created temporary VRT at {vrt_path}")
     
+    t_warp_start = time.perf_counter()
     try:
         with rasterio.open(vrt_path) as src:
             # Reproject from the VRT to the destination array
@@ -224,6 +230,9 @@ def _reproject_dem_to_aeqd(
         # Cleanup VRT file
         if os.path.exists(vrt_path):
             os.remove(vrt_path)
+    
+    t_warp_end = time.perf_counter()
+    log.info(f"DEM Warp/Reproject took {t_warp_end - t_warp_start:.2f}s")
 
     return dst_array[0], dst_transform
 
@@ -521,18 +530,34 @@ def compute_viewshed(
     use_disk_swap = res_cfg.get("use_disk_swap", True)
     max_ram_percent = res_cfg.get("max_ram_percent", 80.0)
     
+    # Determine resolution
+    dem_config = config.get('dem_processing', {})
+    threshold_km = dem_config.get('resolution_threshold_km', 100.0)
+    fine_res = dem_config.get('fine_resolution_m', 30.0)
+    coarse_res = dem_config.get('coarse_resolution_m', 90.0)
+    
+    target_res = fine_res
+    if (d_max / 1000.0) > threshold_km:
+        target_res = coarse_res
+        log.info(f"Radius {d_max/1000:.1f} km > {threshold_km} km. Using coarse DEM resolution: {target_res}m")
+    
+    t0 = time.perf_counter()
     dem_array, transform = _reproject_dem_to_aeqd(
         dem_paths, 
         radar.longitude, 
         radar.latitude, 
         d_max,
+        target_resolution=target_res,
         use_disk_swap=use_disk_swap,
         max_ram_percent=max_ram_percent
     )
+    t1 = time.perf_counter()
+    log.info(f"DEM Reprojection (Total) took {t1-t0:.2f}s")
     log.debug(f"DEM Array shape: {dem_array.shape}, Size: {dem_array.nbytes / 1024 / 1024:.1f} MB")
     
     # 4. Run Radial Sweep
     log.debug("Running radial sweep...")
+    t_sweep_start = time.perf_counter()
     poly_aeqd = _radial_sweep_visibility(
         dem_array, 
         transform, 
@@ -544,6 +569,8 @@ def compute_viewshed(
         max_ram_percent=max_ram_percent,
         progress_callback=progress_callback
     )
+    t_sweep_end = time.perf_counter()
+    log.info(f"Radial Sweep took {t_sweep_end - t_sweep_start:.2f}s")
     
     # 5. Reproject back to WGS84
     if progress_callback:
@@ -556,7 +583,10 @@ def compute_viewshed(
     project = pyproj.Transformer.from_crs(crs_aeqd, crs_wgs84, always_xy=True).transform
     
     from shapely.ops import transform as shapely_transform
+    t_vec_start = time.perf_counter()
     poly_wgs84 = shapely_transform(project, poly_aeqd)
+    t_vec_end = time.perf_counter()
+    log.info(f"Vector Reprojection took {t_vec_end - t_vec_start:.2f}s")
     
     return poly_wgs84
 

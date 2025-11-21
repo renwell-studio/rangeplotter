@@ -33,6 +33,11 @@ class VerticalConfig(BaseModel):
     target_altitude_reference: str = Field("msl", pattern="^(msl)$")
     dem_vertical_reference: str = "EGM2008"
 
+class DemProcessingConfig(BaseModel):
+    resolution_threshold_km: float = 100.0
+    fine_resolution_m: float = 30.0
+    coarse_resolution_m: float = 90.0
+
 class MultiscaleConfig(BaseModel):
     enable: bool = True
     near_m: int = 50_000
@@ -70,6 +75,7 @@ class Settings(BaseModel):
     progress: ProgressConfig = ProgressConfig()
     earth_model: EarthModelConfig = EarthModelConfig()
     vertical: VerticalConfig = VerticalConfig()
+    dem_processing: DemProcessingConfig = DemProcessingConfig()
     multiscale: MultiscaleConfig = MultiscaleConfig()
     copernicus_api: CopernicusAPIConfig
     logging: dict = Field(default_factory=lambda: {"level": "INFO"})

@@ -34,6 +34,28 @@
 2.  **Concurrency**:
     *   Ensure `reproject` is called with appropriate threading options (e.g., `num_threads=-1` for all cores).
 
+### Feature: Adaptive DEM Resolution & Instrumentation
+**Goal**: Further reduce memory usage and processing time for long-range viewsheds by adaptively switching to a coarser DEM resolution (e.g., 90m) when the analysis radius exceeds a configurable threshold. Additionally, add detailed performance logging to identify bottlenecks.
+
+**Implementation Plan**:
+1.  **Configuration**:
+    *   Add `dem_resolution_threshold_km` to `config.yaml` (default: 100 km).
+    *   Add `coarse_resolution_m` to `config.yaml` (default: 90.0 m).
+    *   Add `fine_resolution_m` to `config.yaml` (default: 30.0 m).
+
+2.  **Instrumentation**:
+    *   Add `time.perf_counter()` logging around key steps in `viewshed.py`:
+        *   VRT Creation.
+        *   Reprojection (Warp).
+        *   Visibility Sweep (Total).
+        *   Polygon Vectorization.
+
+3.  **Adaptive Resolution Logic**:
+    *   Modify `_reproject_dem_to_aeqd` to accept a target resolution.
+    *   In `compute_viewshed`, check `max_radius_m` against `dem_resolution_threshold_km`.
+    *   Select `target_res` (30m vs 90m) accordingly.
+    *   Pass this resolution to the reprojection function.
+
 ## 5. Future Work
 - Union polygons across multiple radars.
 - Advanced propagation modeling.
