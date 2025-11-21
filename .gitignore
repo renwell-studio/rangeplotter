@@ -5,13 +5,8 @@ __pycache__/
 .env
 .venv/
 .env*/
-output/
-data_cache/
-.cache/
-*.log
-.idea/
-.vscode/
-
-# Ignore input files, but keep the sample
-input/*
-!input/radars_sample.kml
+# Ignore working files, but keep the sample input
+working_files/*
+!working_files/input/
+working_files/input/*
+!working_files/input/radars_sample.kml
