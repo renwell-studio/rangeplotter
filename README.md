@@ -8,10 +8,10 @@ Active development. Core LOS algorithms and DEM integration implemented.
 ## Quick Start
 ```bash
 # Calculate theoretical horizon (no terrain)
-python -m rangeplotter.cli.main horizon --input input/radars_sample.kml
+python -m rangeplotter.cli.main horizon --input working_files/input/radars_sample.kml
 
 # Calculate terrain-aware viewshed
-python -m rangeplotter.cli.main viewshed --input input/radars_sample.kml
+python -m rangeplotter.cli.main viewshed --input working_files/input/radars_sample.kml
 ```
 
 ## Workflow
@@ -24,10 +24,17 @@ The `viewshed` command performs the computationally intensive work of calculatin
 
 **Output:**
 This command generates "raw" viewshed polygons. Each output is a standalone KML file representing the visibility for **one sensor** at **one target altitude**.
-- **Location:** `output/viewshed/` (default)
+- **Location:** `working_files/viewshed/` (default)
 - **Naming:** `viewshed-[sensor_name]-tgt_alt_[altitude]m.kml`
 
 These files are intended to be the foundational building blocks for further analysis or visualization. They are saved individually to allow for efficient caching and reprocessing without re-running the expensive visibility calculation.
+
+### 2. Detection Range Clipping (`detection-range`)
+The `detection-range` command takes the raw viewsheds and clips them to a maximum instrumented range. It can also combine multiple sensors into a single network coverage map (union).
+
+**Output:**
+- **Location:** `working_files/detection_range/` (default)
+- **Naming:** `visibility-[name]-tgt_alt_[altitude]m-det_rng_[range]km.kml`
 
 ## Usage
 
@@ -35,7 +42,7 @@ The CLI supports several commands. Use `--help` for detailed information on any 
 
 ### Common Flags
 - `--config`: Path to config YAML (default: `config/config.yaml`)
-- `--input` / `-i`: Path to radar KML file or directory containing KMLs (optional)
+- `--input` / `-i`: Path to radar KML file or directory containing KMLs (optional, defaults to `working_files/input`)
 - `--output` / `-o`: Override output directory (optional)
 - `--verbose` / `-v`: Verbosity level (use `-v` for Info, `-vv` for Debug)
 
@@ -44,19 +51,29 @@ The CLI supports several commands. Use `--help` for detailed information on any 
 #### `horizon`
 Calculate the theoretical maximum geometric horizon (range rings) for each sensor location based on Earth curvature and atmospheric refraction, but without terrain awareness.
 ```bash
-python -m rangeplotter.cli.main horizon -i input/radars.kml -o output/horizon
+python -m rangeplotter.cli.main horizon
 ```
 
 #### `viewshed`
 Calculate the actual terrain-aware visibility for each sensor location using Copernicus GLO-30 DEM data.
 ```bash
-python -m rangeplotter.cli.main viewshed -i input/radars.kml -o output/viewshed
+python -m rangeplotter.cli.main viewshed
+```
+
+#### `detection-range`
+Clip viewsheds to maximum detection ranges and optionally union them.
+```bash
+# Process all viewsheds in the default output directory
+python -m rangeplotter.cli.main detection-range --input working_files/viewshed/*.kml
+
+# Process specific files with a custom range
+python -m rangeplotter.cli.main detection-range --input "working_files/viewshed/MyRadar*.kml" --range 150
 ```
 
 #### `prepare-dem`
 Pre-download DEM tiles for a given area to populate the cache.
 ```bash
-python -m rangeplotter.cli.main prepare-dem -i input/radars.kml
+python -m rangeplotter.cli.main prepare-dem
 ```
 
 #### `debug-auth-dem`

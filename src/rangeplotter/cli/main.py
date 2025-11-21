@@ -5,7 +5,7 @@ from rich import print, progress
 from pathlib import Path
 from typing import Optional, List
 from rangeplotter.config.settings import Settings
-from rangeplotter.io.kml import parse_radars, extract_kml_styles, parse_viewshed_kml
+from rangeplotter.io.kml import parse_radars, parse_viewshed_kml
 from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.auth.cdse import CdseAuth

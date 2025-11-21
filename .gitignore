@@ -18,3 +18,6 @@ working_files/*
 !working_files/input/
 working_files/input/*
 !working_files/input/radars_sample.kml
+
+# Private docs
+docs/TODO.md

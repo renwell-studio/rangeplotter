@@ -53,7 +53,6 @@ class CopernicusAPIConfig(BaseModel):
     dataset_identifier: Optional[str] = None  # e.g. "COP-DEM_GLO-30" to narrow products
 
 class Settings(BaseModel):
-    # radars_kml: str  # Deprecated
     input_dir: str = "working_files/input"
     output_viewshed_dir: str = "working_files/viewshed"
     output_detection_dir: str = "working_files/detection_range"

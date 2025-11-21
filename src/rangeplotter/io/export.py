@@ -31,11 +31,7 @@ def export_viewshed_kml(
     altitude: float,
     style_config: dict,
     sensors: Optional[List[Dict[str, Any]]] = None,
-    document_name: Optional[str] = None,
-    # Legacy support
-    sensor_location: Optional[Tuple[float, float]] = None,
-    sensor_name: Optional[str] = None,
-    filename_override: Optional[str] = None
+    document_name: Optional[str] = None
 ) -> None:
     """
     Export a viewshed to a self-contained KML file with sensor location(s) and polygon.
@@ -43,24 +39,9 @@ def export_viewshed_kml(
     # Normalize inputs
     if sensors is None:
         sensors = []
-        if sensor_location and sensor_name:
-             sensors.append({
-                 'name': sensor_name,
-                 'location': sensor_location,
-                 'style_config': style_config
-             })
     
     if document_name is None:
-        if filename_override:
-            document_name = filename_override
-            if document_name.endswith(".kml"):
-                document_name = document_name[:-4]
-        elif sensor_name:
-             alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
-             safe_name = sensor_name.replace(" ", "_").replace("/", "-")
-             document_name = f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
-        else:
-             document_name = "Viewshed Output"
+        document_name = "Viewshed Output"
     
     # Polygon style
     line_color = style_config.get("line_color", "#FFA500")
