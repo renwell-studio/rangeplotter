@@ -12,6 +12,8 @@ data_cache/
 .cache/
 .idea/
 .vscode/
+build/
+dist/
 
 # Ignore working files, but keep the sample input
 working_files/*
