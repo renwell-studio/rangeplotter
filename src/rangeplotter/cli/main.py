@@ -627,7 +627,8 @@ def viewshed(
                                 'location': (sensor.longitude, sensor.latitude),
                                 'style_config': final_style
                             }],
-                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}"
+                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
+                            altitude_mode=altitude_mode
                         )
                         
                         if verbose >= 1:

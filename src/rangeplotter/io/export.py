@@ -31,10 +31,13 @@ def export_viewshed_kml(
     altitude: float,
     style_config: dict,
     sensors: Optional[List[Dict[str, Any]]] = None,
-    document_name: Optional[str] = None
+    document_name: Optional[str] = None,
+    altitude_mode: str = "msl"
 ) -> None:
     """
     Export a viewshed to a self-contained KML file with sensor location(s) and polygon.
+    
+    altitude_mode: 'msl' (absolute) or 'agl' (relativeToGround).
     """
     # Normalize inputs
     if sensors is None:
@@ -173,9 +176,14 @@ def export_viewshed_kml(
         if poly.is_empty:
             continue
             
+        # Determine KML altitude mode
+        kml_alt_mode = "absolute"
+        if altitude_mode.lower() == "agl":
+            kml_alt_mode = "relativeToGround"
+            
         # Exterior
         kml_content.append("        <Polygon>")
-        kml_content.append("          <altitudeMode>absolute</altitudeMode>")
+        kml_content.append(f"          <altitudeMode>{kml_alt_mode}</altitudeMode>")
         kml_content.append("          <outerBoundaryIs><LinearRing><coordinates>")
         kml_content.append(_coords_to_kml_str(poly.exterior.coords, altitude))
         kml_content.append("          </coordinates></LinearRing></outerBoundaryIs>")
