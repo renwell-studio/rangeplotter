@@ -30,9 +30,34 @@ jobs:
       run: |
         pyinstaller rangeplotter.spec
 
+    - name: Package Release
+      run: |
+        VERSION=${{ github.ref_name }}
+        RELEASE_DIR="rangeplotter_${VERSION}_linux"
+        
+        # Create directories
+        mkdir -p "$RELEASE_DIR/config"
+        mkdir -p "$RELEASE_DIR/working_files/input"
+        mkdir -p "$RELEASE_DIR/data_cache"
+        
+        # Copy Binary
+        cp dist/rangeplotter "$RELEASE_DIR/"
+        
+        # Copy Config
+        cp config/config.yaml "$RELEASE_DIR/config/"
+        
+        # Copy Docs
+        cp README.md LICENSE "$RELEASE_DIR/"
+        
+        # Copy Sample Data
+        cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
+        
+        # Zip
+        zip -r "${RELEASE_DIR}.zip" "$RELEASE_DIR"
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: dist/rangeplotter
+        files: rangeplotter_*.zip
         generate_release_notes: true

@@ -93,64 +93,62 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-### 5. Build the Binary
-We use **PyInstaller** to build the standalone binary. Do not use `python -m build` (that creates a Python wheel/sdist).
+### 5. Build & Release (Automated)
 
-1.  **Clean & Build**:
+The project uses GitHub Actions to automatically build, package, and publish the release when a new tag is pushed.
+
+1.  **Push the Tag**:
+    (As done in Step 4)
     ```bash
-    pyinstaller rangeplotter.spec --clean --noconfirm
-    ```
-2.  **Verify**:
-    Check the `dist/` directory for the new binary.
-    ```bash
-    ls -l dist/rangeplotter
-    ```
-3.  **Test Binary**:
-    Run the binary directly to ensure it works.
-    ```bash
-    ./dist/rangeplotter --version
+    git push origin vX.Y.Z
     ```
 
-### 6. Create Release Archive
-We distribute the application as a portable ZIP archive containing the binary, configuration, and necessary folders.
+2.  **Monitor Action**:
+    *   Go to the **Actions** tab in the GitHub repository.
+    *   Watch the **Build and Release** workflow.
 
-1.  **Create Directory Structure**:
-    ```bash
-    VERSION="vX.Y.Z"
-    mkdir -p release/rangeplotter_${VERSION}_linux/config
-    mkdir -p release/rangeplotter_${VERSION}_linux/working_files/input
-    ```
+3.  **Verify Release**:
+    *   Once the workflow completes, go to the **Releases** page.
+    *   Verify that `vX.Y.Z` exists and contains the `rangeplotter_vX.Y.Z_linux.zip` asset.
 
-2.  **Copy Files**:
-    ```bash
-    # Binary
-    cp dist/rangeplotter release/rangeplotter_${VERSION}_linux/
-    
-    # Config (Default)
-    cp config/config.yaml release/rangeplotter_${VERSION}_linux/config/
-    
-    # Documentation
-    cp README.md LICENSE release/rangeplotter_${VERSION}_linux/
-    
-    # Sample Data (Optional)
-    cp working_files/input/radars_sample.kml release/rangeplotter_${VERSION}_linux/working_files/input/
-    ```
+---
 
-3.  **Create Zip**:
-    ```bash
-    cd release
-    zip -r rangeplotter_${VERSION}_linux.zip rangeplotter_${VERSION}_linux/
-    cd ..
-    ```
+## Appendix: Manual Build & Release
 
-### 7. Publish
-Use the GitHub CLI to create the release and upload the archive. We specify the repo explicitly to avoid local git config permission issues:
+If the automated pipeline fails or you need to build locally:
+
+### 1. Build Binary
+```bash
+pyinstaller rangeplotter.spec --clean --noconfirm
+```
+
+### 2. Create Archive
+```bash
+VERSION="vX.Y.Z"
+RELEASE_DIR="release/rangeplotter_${VERSION}_linux"
+
+# Clean up
+rm -rf "$RELEASE_DIR"
+
+# Create directories
+mkdir -p "$RELEASE_DIR/config"
+mkdir -p "$RELEASE_DIR/working_files/input"
+mkdir -p "$RELEASE_DIR/data_cache"
+
+# Copy Files
+cp dist/rangeplotter "$RELEASE_DIR/"
+cp config/config.yaml "$RELEASE_DIR/config/"
+cp README.md LICENSE "$RELEASE_DIR/"
+cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
+
+# Zip
+cd release
+zip -r "rangeplotter_${VERSION}_linux.zip" "rangeplotter_${VERSION}_linux"
+cd ..
+```
+
+### 3. Publish
 ```bash
 gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --title "${VERSION}" --generate-notes
 ```
-If the release already exists (e.g. created by CI), use upload instead:
-```bash
-gh release upload ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --clobber
-```
-Alternatively, upload `release/rangeplotter_${VERSION}_linux.zip` manually via the GitHub website.
 
