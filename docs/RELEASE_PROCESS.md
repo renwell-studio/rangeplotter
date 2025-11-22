@@ -71,26 +71,29 @@ We follow Semantic Versioning (SemVer). Group changes together rather than relea
 
 When ready to release a new version (e.g., `v0.1.0`):
 
-### 1. Update Version Number
+### 1. Update Changelog
+Review `CHANGELOG.md`. Move the content from `[Unreleased]` to a new section `[X.Y.Z] - YYYY-MM-DD`. Ensure all notable changes are captured.
+
+### 2. Update Version Number
 Update the version string in the following files:
 *   `pyproject.toml`: `version = "X.Y.Z"`
 *   `src/rangeplotter/cli/main.py`: `__version__ = "X.Y.Z"`
 
-### 2. Commit Version Bump
+### 3. Commit Version Bump
 ```bash
-git add pyproject.toml src/rangeplotter/cli/main.py
+git add CHANGELOG.md pyproject.toml src/rangeplotter/cli/main.py
 git commit -m "Bump version to vX.Y.Z"
 git push origin main
 ```
 
-### 3. Tag the Release
+### 4. Tag the Release
 Create an annotated git tag and push it to GitHub.
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-### 4. Build the Binary
+### 5. Build the Binary
 We use **PyInstaller** to build the standalone binary. Do not use `python -m build` (that creates a Python wheel/sdist).
 
 1.  **Clean & Build**:
@@ -108,7 +111,7 @@ We use **PyInstaller** to build the standalone binary. Do not use `python -m bui
     ./dist/rangeplotter --version
     ```
 
-### 5. Create Release Archive
+### 6. Create Release Archive
 We distribute the application as a portable ZIP archive containing the binary, configuration, and necessary folders.
 
 1.  **Create Directory Structure**:
@@ -140,7 +143,7 @@ We distribute the application as a portable ZIP archive containing the binary, c
     cd ..
     ```
 
-### 6. Publish
+### 7. Publish
 Use the GitHub CLI to create the release and upload the archive. We specify the repo explicitly to avoid local git config permission issues:
 ```bash
 gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --title "${VERSION}" --generate-notes
