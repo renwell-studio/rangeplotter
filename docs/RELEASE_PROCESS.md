@@ -4,7 +4,17 @@ This document outlines the standard workflow for developing features, managing g
 
 ## 1. Git Workflow
 
-We follow a simple feature-branch workflow.
+We follow a simple feature-branch workflow to maintain stability.
+
+### Core Rules
+*   **The `main` branch is sacred**: It should always be stable and deployable. **Never commit directly to `main`.**
+*   **Use Feature Branches**: All changes (features, bugs, docs) must happen in a dedicated branch.
+*   **Merge via Pull Request**: Ideally, use PRs to merge changes back to `main` to ensure code review.
+
+### Branch Naming
+*   Features: `feature/description` (e.g., `feature/add-agl-support`)
+*   Bug Fixes: `fix/description` (e.g., `fix/memory-leak`)
+*   Documentation: `docs/description` (e.g., `docs/update-readme`)
 
 ### Starting a New Feature
 1.  **Update Main**: Ensure your local `main` branch is up to date.
@@ -14,7 +24,7 @@ We follow a simple feature-branch workflow.
     ```
 2.  **Create Branch**: Create a new branch for your feature or fix.
     ```bash
-    git checkout -b feature-name
+    git checkout -b feature/my-new-feature
     ```
 
 ### Development
@@ -49,7 +59,15 @@ We follow a simple feature-branch workflow.
 
 ---
 
-## 2. Release Process
+## 2. Versioning Strategy
+
+We follow Semantic Versioning (SemVer). Group changes together rather than releasing every commit.
+
+*   **Patch Release (v0.1.x)**: Bug fixes, documentation updates, or minor tweaks.
+*   **Minor Release (v0.x.0)**: New features or functionality (backward-compatible).
+*   **Major Release (vx.0.0)**: Breaking changes or "feature complete" milestones.
+
+## 3. Release Process
 
 When ready to release a new version (e.g., `v0.1.0`):
 
