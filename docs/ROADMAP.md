@@ -83,7 +83,38 @@
     *   **Single Sensor**: `[name]` is the sensor site name.
     *   **Multi-Sensor**: `[name]` is the provided `--name` (e.g., "North_Network") or "Union".
 
-## 6. Packaging & Distribution
+## 6. AGL Target Support (New Feature)
+**Goal**: Allow users to calculate viewsheds for targets at a constant height Above Ground Level (AGL), in addition to the existing Mean Sea Level (MSL) support. This is critical for low-altitude analysis (e.g., drones, ground vehicles) where visibility is determined by terrain masking relative to the surface.
+
+**Status**: **Planned**.
+
+**Implementation Plan**:
+
+1.  **Configuration & CLI**:
+    *   **Config**: Utilize the existing `vertical.target_altitude_reference` setting in `config.yaml`. Allow values `"msl"` (default) and `"agl"`.
+    *   **CLI**: Add a `--ref` or `--reference` flag to the `viewshed` command to override the config (e.g., `--ref agl`).
+    *   **Validation**: Ensure the user is aware of which mode is active via logging.
+
+2.  **Core Logic (`src/rangeplotter/los/viewshed.py`)**:
+    *   Modify `compute_viewshed` to accept an `altitude_mode` parameter.
+    *   **Refactor the Radial Sweep Loop**:
+        *   Current (MSL): `target_h` is a constant scalar. `theta_target` is calculated against this constant plane.
+        *   New (AGL): `target_h` varies with terrain.
+            *   `target_elevation_grid = terrain_elevation + target_altitude_agl`
+            *   `theta_target` is calculated using this dynamic grid.
+    *   **Performance**: This change involves array-based arithmetic for the target angle, which is computationally equivalent to the existing terrain angle calculation. No significant performance penalty is expected.
+
+3.  **Output Naming**:
+    *   Update filename generation to explicitly include the reference frame to avoid ambiguity.
+    *   Format: `[Site]_[Altitude]m_[Ref]_viewshed.kml` (e.g., `Site_100.0m_AGL_viewshed.kml`).
+    *   *Note*: Consider updating existing MSL output to include `_MSL` for consistency, or keep legacy format for MSL. (Decision: Explicit `_MSL` / `_AGL` is preferred for clarity).
+
+4.  **Subtleties & Edge Cases**:
+    *   **0m AGL**: Equivalent to checking visibility of the ground surface itself.
+    *   **Underground Targets**: For AGL, targets are by definition above ground (if alt >= 0), so the "underground check" (`target < terrain`) is implicitly satisfied.
+    *   **Refraction**: The standard 4/3 Earth radius model (or configured k-factor) will apply to the path `Sensor -> (Terrain + AGL)` exactly as it does for `Sensor -> Terrain`.
+
+## 7. Packaging & Distribution
 **Goal**: Package the utility for easy distribution to Linux users without requiring them to manage Python environments or complex GDAL dependencies.
 
 **Strategy**: **Standalone Binary via PyInstaller**.

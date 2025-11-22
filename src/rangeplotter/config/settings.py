@@ -30,7 +30,7 @@ class EarthModelConfig(BaseModel):
     ellipsoid: str = "WGS84"
 
 class VerticalConfig(BaseModel):
-    target_altitude_reference: str = Field("msl", pattern="^(msl)$")
+    target_altitude_reference: str = Field("msl", pattern="^(msl|agl)$")
     dem_vertical_reference: str = "EGM2008"
 
 class MultiscaleConfig(BaseModel):

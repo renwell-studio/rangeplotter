@@ -326,6 +326,7 @@ def viewshed(
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
+    reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
     check_download: bool = typer.Option(False, "--check-download", "--check", help="Check download requirements without downloading full dataset."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
@@ -361,6 +362,14 @@ def viewshed(
         if parsed_alts:
             settings.altitudes_msl_m = parsed_alts
             typer.echo(f"Using target altitudes from CLI: {settings.altitudes_msl_m}")
+            
+    # Override reference if provided via CLI
+    if reference_cli:
+        if reference_cli.lower() in ["msl", "agl"]:
+            settings.vertical.target_altitude_reference = reference_cli.lower()
+            typer.echo(f"Using target altitude reference from CLI: {settings.vertical.target_altitude_reference.upper()}")
+        else:
+            typer.echo(f"[yellow]Warning: Invalid reference '{reference_cli}'. Using config value.[/yellow]")
         
     from rich.console import Console
     console = Console()
@@ -583,12 +592,24 @@ def viewshed(
                             log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
                         
                         cfg_dict = settings.model_dump()
-                        poly = compute_viewshed(sensor, alt, dem_client, cfg_dict, progress_callback=_update_progress, rich_progress=prog)
+                        altitude_mode = settings.vertical.target_altitude_reference
+                        poly = compute_viewshed(
+                            sensor, 
+                            alt, 
+                            dem_client, 
+                            cfg_dict, 
+                            progress_callback=_update_progress, 
+                            rich_progress=prog,
+                            altitude_mode=altitude_mode
+                        )
                         
                         # Export individual KML
                         safe_name = sensor.name.replace(" ", "_").replace("/", "-")
                         alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
-                        filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m.kml"
+                        
+                        # Include reference in filename
+                        ref_str = altitude_mode.upper()
+                        filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
                         out_path = out_dir_path / filename
                         
                         # Merge sensor style with default style
@@ -606,7 +627,7 @@ def viewshed(
                                 'location': (sensor.longitude, sensor.latitude),
                                 'style_config': final_style
                             }],
-                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m"
+                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}"
                         )
                         
                         if verbose >= 1:

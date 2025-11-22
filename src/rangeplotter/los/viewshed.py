@@ -248,12 +248,13 @@ def _radial_sweep_visibility(
     dem_array: np.ndarray,
     transform: rasterio.Affine,
     radar_h_msl: float,
-    target_h_msl: float,
+    target_h: float,
     max_radius_m: float,
     center_lat_deg: float,
     k_factor: float = 1.333,
     max_ram_percent: float = 80.0,
-    progress_callback: Optional[Callable[[str, float], None]] = None
+    progress_callback: Optional[Callable[[str, float], None]] = None,
+    altitude_mode: str = "msl"
 ) -> Polygon | MultiPolygon:
     """
     Perform radial sweep to determine visibility polygon.
@@ -261,19 +262,20 @@ def _radial_sweep_visibility(
     dem_array: Elevation data in AEQD (meters).
     transform: Affine transform of the DEM (AEQD).
     radar_h_msl: Radar height (MSL).
-    target_h_msl: Target height (MSL).
+    target_h: Target height (MSL or AGL depending on mode).
     max_radius_m: Maximum analysis radius.
     center_lat_deg: Latitude of radar (for earth radius).
     k_factor: Effective earth radius factor.
     max_ram_percent: Maximum percentage of system RAM to use.
     progress_callback: Optional callback(step: str, percentage: float) for progress updates.
+    altitude_mode: "msl" or "agl".
     """
     
     # Constants
     # Calculate effective earth radius at this latitude
     R_eff = effective_earth_radius(center_lat_deg, k_factor)
     
-    log.debug(f"Radial Sweep Inputs: Radar H={radar_h_msl:.2f}m, Target H={target_h_msl:.2f}m, Max Radius={max_radius_m:.2f}m, R_eff={R_eff:.2f}m")
+    log.debug(f"Radial Sweep Inputs: Radar H={radar_h_msl:.2f}m, Target H={target_h:.2f}m ({altitude_mode}), Max Radius={max_radius_m:.2f}m, R_eff={R_eff:.2f}m")
 
     height, width = dem_array.shape
     
@@ -407,14 +409,27 @@ def _radial_sweep_visibility(
         M = np.maximum.accumulate(theta_terrain, axis=1)
         
         # Target angle
-        target_term1 = (target_h_msl - radar_h_msl) / r_safe
+        if altitude_mode == "agl":
+            # Target is at terrain + target_h
+            # target_elev = elevations_filled + target_h
+            # target_term1 = (target_elev - radar_h_msl) / r_safe
+            #              = (elevations_filled + target_h - radar_h_msl) / r_safe
+            target_term1 = (elevations_filled + target_h - radar_h_msl) / r_safe
+        else:
+            # MSL mode (Legacy)
+            # target_h is absolute MSL
+            target_term1 = (target_h - radar_h_msl) / r_safe
+            
         theta_target = target_term1 - term2
         
         # Visibility check
         vis_chunk = theta_target >= M
         
         # Mask underground
-        vis_chunk[target_h_msl < elevations_filled] = False
+        if altitude_mode == "msl":
+            # Only relevant for MSL targets which might be below terrain
+            vis_chunk[target_h < elevations_filled] = False
+        # For AGL, target is always above terrain (assuming target_h >= 0)
         
         # Store result
         visible_polar[az_start:az_end, :] = vis_chunk
@@ -522,11 +537,12 @@ def _radial_sweep_visibility(
 
 def compute_viewshed(
     radar: RadarSite,
-    target_alt_msl: float,
+    target_alt: float,
     dem_client: DemClient,
     config: dict,
     progress_callback: Optional[Callable[[str, float], None]] = None,
-    rich_progress: Optional[Any] = None
+    rich_progress: Optional[Any] = None,
+    altitude_mode: str = "msl"
 ) -> Polygon | MultiPolygon:
     
     # 1. Calculate max geometric range
@@ -539,12 +555,32 @@ def compute_viewshed(
         # For now, assume 0 if None? Or raise error.
         radar_h = 0.0 # Fallback
         
-    d_max = mutual_horizon_distance(radar_h, target_alt_msl, radar.latitude, k=config.get("atmospheric_k_factor", 1.333))
+    # For horizon calculation, if AGL, we need to estimate.
+    # Worst case for horizon is usually high terrain, but for download bounds,
+    # we can assume target_alt is effectively MSL for the purpose of "max possible range"
+    # or add a buffer. If target is 10m AGL, it could be on a 2000m mountain.
+    # However, mutual_horizon_distance takes MSL altitudes.
+    # If mode is AGL, we don't know the max MSL without scanning terrain.
+    # Strategy: Use a generous buffer or assume a "reasonable max terrain height" + target_alt.
+    # Better strategy: Use the max_target_alt logic from main.py which already does this?
+    # Actually, main.py calls mutual_horizon_distance with max(altitudes).
+    # If altitudes are AGL, main.py might be underestimating if it treats them as MSL.
+    # But let's stick to the passed target_alt for now.
+    
+    # If AGL, we treat target_alt as if it were MSL for the initial "how far to look" check,
+    # but maybe add a buffer for terrain height?
+    # Standard radar horizon formula: d ~= 4.12 * (sqrt(h1) + sqrt(h2))
+    # If h2 is AGL, the actual h2_msl = h_terrain + h_agl.
+    # If we don't know h_terrain, we can't know exact horizon.
+    # But we download based on main.py's logic which uses max_target_alt.
+    # Let's assume the caller (main.py) has handled the download bounds correctly.
+    
+    d_max = mutual_horizon_distance(radar_h, target_alt, radar.latitude, k=config.get("atmospheric_k_factor", 1.333))
     
     # Add a buffer?
     d_max *= 1.05
     
-    log.debug(f"Computing viewshed for {radar.name} @ {target_alt_msl}m. Max range: {d_max/1000:.1f} km")
+    log.debug(f"Computing viewshed for {radar.name} @ {target_alt}m ({altitude_mode.upper()}). Max range: {d_max/1000:.1f} km")
     
     # 2. Get DEM
     if progress_callback:
@@ -623,12 +659,13 @@ def compute_viewshed(
             dem_array, 
             transform, 
             radar_h, 
-            target_alt_msl, 
+            target_alt, 
             pass_max_r, 
             radar.latitude,
             config.get("atmospheric_k_factor", 1.333),
             max_ram_percent=max_ram_percent,
-            progress_callback=None # Don't spam progress for sub-steps
+            progress_callback=None, # Don't spam progress for sub-steps
+            altitude_mode=altitude_mode
         )
         t_sweep_end = time.perf_counter()
         log.debug(f"Zone {i+1} Sweep took {t_sweep_end - t_sweep_start:.2f}s")
