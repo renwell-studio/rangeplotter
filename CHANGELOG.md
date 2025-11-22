@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Moved `target_altitude_reference` setting to the top level in `config.yaml` for better visibility.
 - Updated KML export to use `relativeToGround` altitude mode when AGL reference is selected, ensuring polygons render correctly above terrain in Google Earth.
+- Updated default configuration values in `config.yaml` for simpler initial testing (`altitudes_msl_m`=[0], `detection_ranges`=[50]).
+- Updated `README.md` configuration table to match current settings.
 
 ## [0.1.2] - 2025-11-22
 ### Fixed

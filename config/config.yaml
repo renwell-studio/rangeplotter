@@ -25,7 +25,7 @@ cache_dir: "data_cache"
 # List of target altitudes in meters.
 # Superceded by CLI input if provided.
 # Example: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
-altitudes_msl_m: [2, 10, 50, 100, 500, 1000, 2000, 10000, 15000]
+altitudes_msl_m: [0]
 
 # Reference for target altitudes.
 # Options:
@@ -45,7 +45,7 @@ atmospheric_k_factor: 1.333
 # List of maximum detection ranges in kilometres from the sensor location.
 # Superceded by CLI input if provided.
 # Example: [50, 100, 200]
-detection_ranges: [50, 100, 200]
+detection_ranges: [50]
 
 # -----------------------------------------------------------------------------
 # Output Settings
