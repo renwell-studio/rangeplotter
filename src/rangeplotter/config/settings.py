@@ -92,12 +92,20 @@ class Settings(BaseModel):
         return self.altitudes_msl_m
 
     def resolve_path(self, path_str: str) -> Path:
-        """Resolve a path relative to the config file location if it's not absolute."""
+        """
+        Resolve a path relative to the project root (parent of config dir) if it's not absolute.
+        
+        If config is at /app/config/config.yaml, we want 'data_cache' to resolve to /app/data_cache,
+        NOT /app/config/data_cache.
+        """
         p = Path(path_str)
         if p.is_absolute():
             return p
         
         if self._config_base_path:
+            # If config is in a 'config' subdirectory, go up one level to find the project root
+            if self._config_base_path.name == 'config':
+                return self._config_base_path.parent / p
             return self._config_base_path / p
         
         return Path.cwd() / p
