@@ -1,8 +1,8 @@
 # RangePlotter
 
-**Advanced Sensor Line-of-Sight & Terrain Visibility Analysis**
+**Simple large-radius viewshed and visibility  analysis**
 
-RangePlotter is a command line, python-based geospatial utility designed to calculate high-fidelity sensor coverage maps for visualisation in an appropriate viewer (such as Google Earth). Unlike simple geometric tools, RangePlotter integrates high-resolution global terrain data (Copernicus GLO-30) to determine exactly where a sensor can see, accounting for Earth curvature, atmospheric refraction, and terrain masking (viewsheds).
+RangePlotter is a command line, python-based geospatial utility designed to calculate accurate large-radius sensor coverage maps for visualisation in an appropriate viewer (such as Google Earth). Unlike pure geometric tools, RangePlotter integrates high-resolution (30m) global terrain data (Copernicus GLO-30) to determine exactly where a sensor can see, accounting for Earth curvature, atmospheric refraction, and terrain masking (viewsheds).
 
 ## Use Cases
 
@@ -12,15 +12,15 @@ RangePlotter is a command line, python-based geospatial utility designed to calc
 
 ---
 
-## Tech Stack & Methodology
+## Quick Start Guide
 
-RangePlotter is built on a robust open-source geospatial stack:
-*   **Core Engine**: Python 3.12+
-*   **Geospatial Processing**: `Rasterio` (GDAL), `Shapely`, `PyProj`.
-*   **Terrain Data**: Automatic fetching and caching of **Copernicus GLO-30 DEM** (30m global resolution).
-*   **Physics**:
-    *   **Adjustable Earth Equivalent Radius Model**: Accounts for atmospheric refraction.
-    *   **Azimuthal Equidistant Projection**: Automatically centers calculations on each sensor for high-precision distance measurements.
+1. Install
+2. Connect your (free) Copernicus account
+3. Provide a .kml file (e.g. exported from Google Earth) with one or more placemarks
+4. Run './rangeplotter viewshed' to calculate the viewshed around your placemark
+5. Import the output .kml file to Google Earth to see your viewshed
+
+See below for lots more detail...
 
 ---
 
@@ -100,7 +100,7 @@ COPERNICUS_PASSWORD=your_password
 
 ---
 
-## ⚡ Quick Start Guide
+## ⚡ Workflow Guide
 
 ### 1. Prepare Input
 Place your radar sites in a KML file (e.g., `working_files/input/my_radars.kml`).
@@ -131,15 +131,29 @@ Clip the raw viewsheds to specific instrumented ranges (e.g., 100km, 200km) and 
 
 ## Configuration
 
-The behavior is controlled by `config/config.yaml`. Key settings include:
+Most behaviours and settings are controlled by `config/config.yaml`. Key settings include:
 
 | Setting | Description | Default |
 | :--- | :--- | :--- |
-| `altitudes_msl_m` | List of target altitudes to analyze during viewshed calculation (e.g., `[50, 1000]`). | `[50]` |
-| `radome_height_m_agl` | Height of the sensor above ground. | `5.0` |
-| `atmospheric_k_factor` | Refraction coefficient (4/3 Earth is common for radar applications). | `1.333` |
-| `simplify_tolerance_m` | Polygon simplification (higher = smaller files). | `5.0` |
 | `input_dir` | Directory to scan for KML inputs. | `working_files/input` |
+| `altitudes_msl_m` | List of target altitudes (meters) for viewshed analysis. | `[2, 10, ...]` |
+| `target_altitude_reference` | Altitude mode: `msl` (absolute) or `agl` (relative to terrain). | `msl` |
+| `radome_height_m_agl` | Height of the sensor above ground (meters). | `5.0` |
+| `atmospheric_k_factor` | Refraction coefficient (1.333 = 4/3 Earth radius). | `1.333` |
+| `detection_ranges` | List of max ranges (km) for `detection-range` clipping. | `[50, 100, 200]` |
+| `simplify_tolerance_m` | Polygon simplification (higher = smaller files). | `5.0` |
+
+---
+
+## Tech Stack & Methodology
+
+RangePlotter is built on a robust open-source geospatial stack:
+*   **Core Engine**: Python 3.12+
+*   **Geospatial Processing**: `Rasterio` (GDAL), `Shapely`, `PyProj`.
+*   **Terrain Data**: Automatic fetching and caching of **Copernicus GLO-30 DEM** (30m global resolution).
+*   **Physics**:
+    *   **Adjustable Earth Equivalent Radius Model**: Accounts for atmospheric refraction.
+    *   **Azimuthal Equidistant Projection**: Automatically centers calculations on each sensor for high-precision distance measurements.
 
 ---
 
