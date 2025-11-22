@@ -152,12 +152,7 @@ def export_viewshed_kml(
     
     alt_str = f"{int(altitude)}" if altitude.is_integer() else f"{altitude}"
     
-    if len(sensors) == 1:
-        safe_s_name = sensors[0]['name'].replace(" ", "_").replace("/", "-")
-        poly_name = f"viewshed-{safe_s_name}-tgt_alt_{alt_str}m"
-    else:
-        # Union case
-        poly_name = f"{document_name}-viewshed"
+    poly_name = document_name
 
     kml_content.extend([
         '      <Placemark>',

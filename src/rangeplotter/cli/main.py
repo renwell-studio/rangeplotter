@@ -833,6 +833,7 @@ def detection_range(
                 alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                 rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
                 filename = f"visibility-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
+                kml_doc_name = filename.replace(".kml", "")
                 
                 sensors_list = []
                 for item in items:
@@ -848,7 +849,7 @@ def detection_range(
                     altitude=alt,
                     style_config=style_to_use,
                     sensors=sensors_list,
-                    document_name=base_name
+                    document_name=kml_doc_name
                 )
                 
                 prog.advance(task)
