@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.3] - 2025-11-22
 ### Added
 - Support for AGL (Above Ground Level) target altitudes in viewshed calculations.
 - New CLI flag `--ref` / `--reference` to toggle between 'msl' and 'agl' modes.
@@ -16,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated KML export to use `relativeToGround` altitude mode when AGL reference is selected, ensuring polygons render correctly above terrain in Google Earth.
 - Updated default configuration values in `config.yaml` for simpler initial testing (`altitudes_msl_m`=[0], `detection_ranges`=[50]).
 - Updated `README.md` configuration table to match current settings.
+
+### Fixed
+- Fixed issue where `detection-range` output KMLs had internal document and polygon names that did not match the filename.
 
 ## [0.1.2] - 2025-11-22
 ### Fixed
