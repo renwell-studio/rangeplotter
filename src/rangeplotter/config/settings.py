@@ -30,7 +30,6 @@ class EarthModelConfig(BaseModel):
     ellipsoid: str = "WGS84"
 
 class VerticalConfig(BaseModel):
-    target_altitude_reference: str = Field("msl", pattern="^(msl|agl)$")
     dem_vertical_reference: str = "EGM2008"
 
 class MultiscaleConfig(BaseModel):
@@ -61,6 +60,7 @@ class Settings(BaseModel):
     output_detection_dir: str = "working_files/detection_range"
     cache_dir: str = "data_cache"
     altitudes_msl_m: List[float]
+    target_altitude_reference: str = Field("msl", pattern="^(msl|agl)$")
     radome_height_m_agl: float = 5.0
     atmospheric_k_factor: float = 1.333
     working_crs_strategy: str = Field("auto_aeqd", pattern=r"^(auto_aeqd|manual:EPSG:\d+)$")

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Support for AGL (Above Ground Level) target altitudes in viewshed calculations.
+- New CLI flag `--ref` / `--reference` to toggle between 'msl' and 'agl' modes.
+- New configuration option `target_altitude_reference` in `config.yaml`.
+
+### Changed
+- Moved `target_altitude_reference` setting to the top level in `config.yaml` for better visibility.
+- Updated KML export to use `relativeToGround` altitude mode when AGL reference is selected, ensuring polygons render correctly above terrain in Google Earth.
 
 ## [0.1.2] - 2025-11-22
 ### Fixed

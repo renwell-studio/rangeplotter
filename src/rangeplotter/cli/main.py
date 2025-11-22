@@ -366,8 +366,8 @@ def viewshed(
     # Override reference if provided via CLI
     if reference_cli:
         if reference_cli.lower() in ["msl", "agl"]:
-            settings.vertical.target_altitude_reference = reference_cli.lower()
-            typer.echo(f"Using target altitude reference from CLI: {settings.vertical.target_altitude_reference.upper()}")
+            settings.target_altitude_reference = reference_cli.lower()
+            typer.echo(f"Using target altitude reference from CLI: {settings.target_altitude_reference.upper()}")
         else:
             typer.echo(f"[yellow]Warning: Invalid reference '{reference_cli}'. Using config value.[/yellow]")
         
@@ -592,7 +592,7 @@ def viewshed(
                             log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
                         
                         cfg_dict = settings.model_dump()
-                        altitude_mode = settings.vertical.target_altitude_reference
+                        altitude_mode = settings.target_altitude_reference
                         poly = compute_viewshed(
                             sensor, 
                             alt, 
