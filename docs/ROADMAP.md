@@ -79,7 +79,7 @@
 
 3.  **Output**:
     *   **Structure**: `output/detection_range/[name]/`
-    *   **Filenames**: `visibility-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml`
+    *   **Filenames**: `rangeplotter-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml`
     *   **Single Sensor**: `[name]` is the sensor site name.
     *   **Multi-Sensor**: `[name]` is the provided `--name` (e.g., "North_Network") or "Union".
 

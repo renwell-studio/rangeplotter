@@ -1,2 +1,2 @@
-"""Visibility package root."""
+"""RangePlotter package root."""
 __all__ = []

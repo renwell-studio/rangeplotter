@@ -829,10 +829,10 @@ def detection_range(
                 specific_out_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Construct filename
-                # visibility-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml
+                # rangeplotter-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml
                 alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                 rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
-                filename = f"visibility-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
+                filename = f"rangeplotter-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
                 kml_doc_name = filename.replace(".kml", "")
                 
                 sensors_list = []

@@ -173,4 +173,4 @@ logging:
   # Logging level. Options: "DEBUG", "INFO", "WARNING", "ERROR"
   level: "INFO"
   # File to write logs to.
-  file: "visibility.log"
+  file: "rangeplotter.log"
