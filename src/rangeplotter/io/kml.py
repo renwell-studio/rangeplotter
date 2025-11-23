@@ -8,7 +8,7 @@ KML_NS = "{http://www.opengis.net/kml/2.2}"
 
 ALTITUDE_MODES = {"clampToGround", "relativeToGround", "absolute"}
 
-def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSite]:
+def parse_radars(kml_path: str, default_sensor_height_m: float) -> List[RadarSite]:
     tree = ET.parse(kml_path)
     root = tree.getroot()
     
@@ -151,7 +151,7 @@ def parse_radars(kml_path: str, default_radome_height_m: float) -> List[RadarSit
             latitude=lat,
             altitude_mode=altitude_mode,
             input_altitude=alt,
-            radome_height_agl_m=default_radome_height_m,
+            sensor_height_m_agl=default_sensor_height_m,
             description=description,
             style_url=style_url,
             style_config=style_config

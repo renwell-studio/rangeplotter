@@ -10,7 +10,7 @@ class RadarSite:
     altitude_mode: str  # clampToGround | relativeToGround | absolute
     input_altitude: Optional[float]  # Raw altitude value from KML (may be 0 or None)
     ground_elevation_m_msl: Optional[float] = None  # To be populated after DEM query
-    radome_height_agl_m: float = 5.0
+    sensor_height_m_agl: float = 5.0
     description: Optional[str] = None
     style_url: Optional[str] = None
     style_config: Optional[dict] = None
@@ -20,13 +20,13 @@ class RadarSite:
         if self.ground_elevation_m_msl is None:
             return None
         if self.altitude_mode == "clampToGround":
-            return self.ground_elevation_m_msl + self.radome_height_agl_m
+            return self.ground_elevation_m_msl + self.sensor_height_m_agl
         if self.altitude_mode == "relativeToGround":
-            return self.ground_elevation_m_msl + (self.input_altitude or 0.0) + self.radome_height_agl_m
+            return self.ground_elevation_m_msl + (self.input_altitude or 0.0) + self.sensor_height_m_agl
         if self.altitude_mode == "absolute":
             # input_altitude is already MSL
-            return (self.input_altitude or self.ground_elevation_m_msl) + self.radome_height_agl_m
+            return (self.input_altitude or self.ground_elevation_m_msl) + self.sensor_height_m_agl
         # Fallback
-        return self.ground_elevation_m_msl + self.radome_height_agl_m
+        return self.ground_elevation_m_msl + self.sensor_height_m_agl
 
 __all__ = ["RadarSite"]

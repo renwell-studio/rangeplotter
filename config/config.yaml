@@ -34,7 +34,7 @@ altitudes_msl_m: [0]
 target_altitude_reference: "msl"
 
 # Height of the sensor above ground level (AGL) in meters.
-radome_height_m_agl: 5.0
+sensor_height_m_agl: 5.0
 
 # Atmospheric refraction factor (k-factor).
 # Use 1 for visible line of sight viewsheds.

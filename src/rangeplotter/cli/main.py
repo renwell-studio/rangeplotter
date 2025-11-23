@@ -73,14 +73,14 @@ def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
     else:
         return [input_path]
 
-def _load_radars(kml_files: List[Path], radome_height: float) -> List:
+def _load_radars(kml_files: List[Path], sensor_height: float) -> List:
     """Load radars from multiple KML files."""
     all_radars = []
     for kml_file in kml_files:
         if not kml_file.exists():
             typer.echo(f"[yellow]Warning: Input file {kml_file} not found.[/yellow]")
             continue
-        radars = parse_radars(str(kml_file), radome_height)
+        radars = parse_radars(str(kml_file), sensor_height)
         all_radars.extend(radars)
     return all_radars
 
@@ -125,7 +125,7 @@ def prepare_dem(
         typer.echo("[red]No input KML files found.[/red]")
         raise typer.Exit(code=1)
         
-    radars = _load_radars(kml_files, settings.radome_height_m_agl)
+    radars = _load_radars(kml_files, settings.sensor_height_m_agl)
     
     auth = CdseAuth(
         token_url=settings.copernicus_api.token_url,
@@ -139,7 +139,7 @@ def prepare_dem(
     from rangeplotter.geo.earth import mutual_horizon_distance
     max_alt = max(settings.effective_altitudes)
     for r in radars:
-        horizon = mutual_horizon_distance(settings.radome_height_m_agl, max_alt, r.latitude, settings.atmospheric_k_factor)
+        horizon = mutual_horizon_distance(settings.sensor_height_m_agl, max_alt, r.latitude, settings.atmospheric_k_factor)
         # Add 5% buffer to match compute_viewshed logic and prevent re-downloading fringe tiles
         horizon *= 1.05
         bbox = approximate_bounding_box(r.longitude, r.latitude, horizon)
@@ -163,7 +163,7 @@ def debug_auth_dem(
         typer.echo("[red]No input KML files found.[/red]")
         raise typer.Exit(code=1)
         
-    radars = _load_radars(kml_files, settings.radome_height_m_agl)
+    radars = _load_radars(kml_files, settings.sensor_height_m_agl)
     if not radars:
         typer.echo("[red]No radars found in KML.[/red]")
         raise typer.Exit(code=1)
@@ -223,7 +223,7 @@ def horizon(
         typer.echo("[red]No input KML files found.[/red]")
         raise typer.Exit(code=1)
         
-    radars = _load_radars(kml_files, settings.radome_height_m_agl)
+    radars = _load_radars(kml_files, settings.sensor_height_m_agl)
     
     if verbose >= 2:
         print("[grey58]DEBUG: settings loaded, radars parsed.[/grey58]")
@@ -381,7 +381,7 @@ def viewshed(
         typer.echo("[red]No input KML files found.[/red]")
         raise typer.Exit(code=1)
         
-    radars = _load_radars(kml_files, settings.radome_height_m_agl)
+    radars = _load_radars(kml_files, settings.sensor_height_m_agl)
     
     auth = CdseAuth(
         token_url=settings.copernicus_api.token_url,
@@ -559,7 +559,7 @@ def viewshed(
         current_step = 0
         
         for kml_file in kml_files:
-            file_radars_raw = parse_radars(str(kml_file), settings.radome_height_m_agl)
+            file_radars_raw = parse_radars(str(kml_file), settings.sensor_height_m_agl)
             
             for r_raw in file_radars_raw:
                 # Find the populated radar object (with elevation data)

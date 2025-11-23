@@ -138,7 +138,7 @@ Most behaviours and settings are controlled by `config/config.yaml`. Key setting
 | `input_dir` | Directory to scan for KML inputs. | `working_files/input` |
 | `altitudes_msl_m` | List of target altitudes (meters) for viewshed analysis. | `[2, 10, ...]` |
 | `target_altitude_reference` | Altitude mode: `msl` (absolute) or `agl` (relative to terrain). | `msl` |
-| `radome_height_m_agl` | Height of the sensor above ground (meters). | `5.0` |
+| `sensor_height_m_agl` | Height of the sensor above ground (meters). | `5.0` |
 | `atmospheric_k_factor` | Refraction coefficient (1.333 = 4/3 Earth radius). | `1.333` |
 | `detection_ranges` | List of max ranges (km) for `detection-range` clipping. | `[50, 100, 200]` |
 | `simplify_tolerance_m` | Polygon simplification (higher = smaller files). | `5.0` |
