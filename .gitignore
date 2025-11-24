@@ -14,6 +14,9 @@ data_cache/
 .vscode/
 build/
 dist/
+.coverage
+.pytest_cache/
+htmlcov/
 
 # Ignore working files, but keep the sample input
 working_files/*
