@@ -6,10 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Comprehensive automated test suite using `pytest`.
+- Achieved >86% code coverage across all modules.
+- Added tests for interactive CLI prompts, authentication flows, and DEM caching logic.
+- Added tests for complex KML geometries (MultiGeometry, holes in polygons).
+
 ### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.
 - Updated output KML filenames to use `rangeplotter-` prefix instead of `visibility-`.
 - Standardized internal naming conventions to "RangePlotter".
+
+### Fixed
+- Fixed various edge cases in KML parsing and export logic discovered during testing.
+- Fixed potential issues with DEM tile download and caching resilience.
 
 ## [0.1.3] - 2025-11-22
 ### Added
