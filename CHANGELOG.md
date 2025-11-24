@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Included `example.env` in the distribution to help users configure authentication.
 - Improved authentication error messages with actionable guidance.
 - Added summary table to `detection-range` command output showing created files and execution stats.
+- Added human-readable duration (e.g., `1h 23m`) to execution time summaries.
 
 ### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.

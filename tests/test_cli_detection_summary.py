@@ -54,3 +54,5 @@ def test_detection_range_summary(tmp_path):
         assert "100.0" in result.stdout
         assert "Total Execution Time:" in result.stdout
         assert "Files Created: 2" in result.stdout
+        # Check for pretty time format (e.g. "0.00s (0s)")
+        assert "(" in result.stdout and "s)" in result.stdout

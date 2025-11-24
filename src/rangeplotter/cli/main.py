@@ -62,6 +62,18 @@ except Exception:
     default_horizon_dir = Path("working_files/horizon")
     default_detection_dir = Path("working_files/detection_range")
 
+def format_duration(seconds: float) -> str:
+    """Format seconds into human readable string (e.g. 1h 23m 45s)."""
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    parts = []
+    if h > 0:
+        parts.append(f"{h}h")
+    if m > 0:
+        parts.append(f"{m}m")
+    parts.append(f"{s}s")
+    return " ".join(parts)
+
 def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
     """Resolve input path to a list of KML files."""
     if input_path is None:
@@ -327,7 +339,7 @@ def horizon(
     
     end_time = time.time()
     total_time = end_time - start_time
-    print(f"[bold]Total execution time: {total_time:.1f}s[/bold]")
+    print(f"[bold]Total execution time: {total_time:.1f}s ({format_duration(total_time)})[/bold]")
     print(f"  - DEM Download time: {dem_client.total_download_time:.1f}s")
     print(f"  - Processing time: {total_time - dem_client.total_download_time:.1f}s")
 
@@ -669,7 +681,7 @@ def viewshed(
     
     end_time = time.time()
     total_time = end_time - start_time
-    print(f"[bold]Total execution time: {total_time:.1f}s[/bold]")
+    print(f"[bold]Total execution time: {total_time:.1f}s ({format_duration(total_time)})[/bold]")
     print(f"  - DEM Download time: {dem_client.total_download_time:.1f}s")
     print(f"  - Processing time: {total_time - dem_client.total_download_time:.1f}s")
 
@@ -900,7 +912,7 @@ def detection_range(
             
         console.print(table)
         
-    console.print(f"\n[bold]Total Execution Time:[/bold] {duration:.2f}s")
+    console.print(f"\n[bold]Total Execution Time:[/bold] {duration:.2f}s ({format_duration(duration)})")
     console.print(f"[bold]Files Created:[/bold] {len(created_files)}")
     console.print(f"[bold]Output Directory:[/bold] {output_dir}")
 
