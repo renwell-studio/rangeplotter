@@ -693,6 +693,7 @@ def detection_range(
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(default_detection_dir, "--output", "-o", help="Output directory"),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
@@ -704,6 +705,10 @@ def detection_range(
         settings = Settings.from_file(config)
     else:
         settings = load_settings()
+
+    from rich.console import Console
+    console = Console()
+    log = setup_logging(settings.logging, verbose=verbose, console=console)
 
     # Combine inputs
     all_inputs = []
@@ -767,26 +772,43 @@ def detection_range(
             raise typer.Exit(code=1)
 
     # Parse inputs
+    if verbose >= 1:
+        console.print(f"[bold blue]Parsing {len(resolved_files)} input files...[/bold blue]")
     parsed_data = []
     for kml_file in resolved_files:
+        if verbose >= 2:
+            log.debug(f"Parsing file: {kml_file}")
+
         # Extract altitude from filename
         match = re.search(r"tgt_alt_([\d.]+)m", kml_file.name)
         if not match:
-            typer.echo(f"[yellow]Warning: Could not extract altitude from filename {kml_file.name}. Skipping.[/yellow]")
+            msg = f"Warning: Could not extract altitude from filename {kml_file.name}. Skipping."
+            if verbose >= 1:
+                log.warning(msg)
+            else:
+                typer.echo(f"[yellow]{msg}[/yellow]")
             continue
         altitude = float(match.group(1))
         
         # Parse KML
-        results = parse_viewshed_kml(str(kml_file))
-        for res in results:
-            parsed_data.append({
-                'file': kml_file,
-                'altitude': altitude,
-                'sensor': res['sensor'],
-                'viewshed': res['viewshed'],
-                'style': res.get('style', {}),
-                'name': res.get('sensor_name') or res.get('folder_name') or kml_file.stem
-            })
+        try:
+            results = parse_viewshed_kml(str(kml_file))
+            if verbose >= 2:
+                log.debug(f"  Found {len(results)} viewshed(s) in {kml_file.name}")
+            
+            for res in results:
+                parsed_data.append({
+                    'file': kml_file,
+                    'altitude': altitude,
+                    'sensor': res['sensor'],
+                    'viewshed': res['viewshed'],
+                    'style': res.get('style', {}),
+                    'name': res.get('sensor_name') or res.get('folder_name') or kml_file.stem
+                })
+        except Exception as e:
+            log.error(f"Failed to parse {kml_file}: {e}")
+            if verbose >= 1:
+                console.print(f"[red]Failed to parse {kml_file}: {e}[/red]")
 
     if not parsed_data:
         typer.echo("[red]No valid data found in input files.[/red]")
@@ -807,6 +829,7 @@ def detection_range(
         progress.SpinnerColumn(),
         progress.TextColumn("[progress.description]{task.description}"),
         transient=True,
+        console=console
     ) as prog:
         # Total tasks = altitudes * ranges
         total_steps = len(by_altitude) * len(final_ranges)
@@ -814,6 +837,8 @@ def detection_range(
         
         for alt, items in by_altitude.items():
             for rng in final_ranges:
+                if verbose >= 2:
+                    log.debug(f"Processing Alt: {alt}m, Range: {rng}km with {len(items)} inputs")
                 prog.update(task, description=f"Processing Alt: {alt}m, Range: {rng}km")
                 
                 clipped_polys = []
@@ -823,14 +848,20 @@ def detection_range(
                 # For single, we use the item's style
                 
                 for item in items:
+                    if verbose >= 2:
+                        log.debug(f"Clipping {item['name']} to {rng}km")
                     clipped = clip_viewshed(item['viewshed'], item['sensor'], rng)
                     if not clipped.is_empty:
                         clipped_polys.append(clipped)
                 
                 if not clipped_polys:
+                    if verbose >= 2:
+                        log.debug("No polygons remained after clipping.")
                     prog.advance(task)
                     continue
                 
+                if verbose >= 2:
+                    log.debug(f"Unioning {len(clipped_polys)} polygons")
                 final_poly = union_viewsheds(clipped_polys)
                 
                 # Determine output name
