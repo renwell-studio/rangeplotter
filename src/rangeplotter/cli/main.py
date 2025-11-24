@@ -2,6 +2,8 @@ from __future__ import annotations
 import typer
 import psutil
 from rich import print, progress
+from rich.table import Table
+from rich.console import Console
 from pathlib import Path
 from typing import Optional, List
 from rangeplotter.config.settings import Settings, load_settings
@@ -683,6 +685,9 @@ def detection_range(
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
+    start_time = time.time()
+    created_files = []
+
     if config:
         settings = Settings.from_file(config)
     else:
@@ -870,7 +875,34 @@ def detection_range(
                     document_name=kml_doc_name
                 )
                 
+                created_files.append({
+                    "altitude": alt,
+                    "range": rng,
+                    "filename": filename,
+                    "path": specific_out_dir / filename
+                })
+                
                 prog.advance(task)
+
+    end_time = time.time()
+    duration = end_time - start_time
+    
+    console = Console()
+    
+    if created_files:
+        table = Table(title="Detection Range Processing Summary")
+        table.add_column("Altitude (m)", justify="right")
+        table.add_column("Range (km)", justify="right")
+        table.add_column("Output File", style="cyan")
+        
+        for f in created_files:
+            table.add_row(str(f["altitude"]), str(f["range"]), f["filename"])
+            
+        console.print(table)
+        
+    console.print(f"\n[bold]Total Execution Time:[/bold] {duration:.2f}s")
+    console.print(f"[bold]Files Created:[/bold] {len(created_files)}")
+    console.print(f"[bold]Output Directory:[/bold] {output_dir}")
 
 if __name__ == "__main__":
     app()
