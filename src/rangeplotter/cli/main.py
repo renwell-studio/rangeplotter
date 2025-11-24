@@ -793,7 +793,7 @@ def detection_range(
             log.debug(f"Parsing file: {kml_file}")
 
         # Extract altitude from filename
-        match = re.search(r"tgt_alt_([\d.]+)m", kml_file.name)
+        match = re.search(r"tgt_alt_([\d.]+)m(?:_([A-Za-z]+))?", kml_file.name)
         if not match:
             msg = f"Warning: Could not extract altitude from filename {kml_file.name}. Skipping."
             if verbose >= 1:
@@ -802,6 +802,7 @@ def detection_range(
                 typer.echo(f"[yellow]{msg}[/yellow]")
             continue
         altitude = float(match.group(1))
+        reference = match.group(2)
         
         # Parse KML
         try:
@@ -813,6 +814,7 @@ def detection_range(
                 parsed_data.append({
                     'file': kml_file,
                     'altitude': altitude,
+                    'reference': reference,
                     'sensor': res['sensor'],
                     'viewshed': res['viewshed'],
                     'style': res.get('style', {}),
@@ -827,13 +829,13 @@ def detection_range(
         typer.echo("[red]No valid data found in input files.[/red]")
         raise typer.Exit(code=1)
 
-    # Group by Altitude
-    by_altitude = {}
+    # Group by (Altitude, Reference)
+    by_alt_ref = {}
     for item in parsed_data:
-        alt = item['altitude']
-        if alt not in by_altitude:
-            by_altitude[alt] = []
-        by_altitude[alt].append(item)
+        key = (item['altitude'], item['reference'])
+        if key not in by_alt_ref:
+            by_alt_ref[key] = []
+        by_alt_ref[key].append(item)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -844,15 +846,16 @@ def detection_range(
         transient=True,
         console=console
     ) as prog:
-        # Total tasks = altitudes * ranges
-        total_steps = len(by_altitude) * len(final_ranges)
+        # Total tasks = groups * ranges
+        total_steps = len(by_alt_ref) * len(final_ranges)
         task = prog.add_task("Processing detection ranges...", total=total_steps)
         
-        for alt, items in by_altitude.items():
+        for (alt, ref), items in by_alt_ref.items():
+            ref_str = f" ({ref})" if ref else ""
             for rng in final_ranges:
                 if verbose >= 2:
-                    log.debug(f"Processing Alt: {alt}m, Range: {rng}km with {len(items)} inputs")
-                prog.update(task, description=f"Processing Alt: {alt}m, Range: {rng}km")
+                    log.debug(f"Processing Alt: {alt}m{ref_str}, Range: {rng}km with {len(items)} inputs")
+                prog.update(task, description=f"Processing Alt: {alt}m{ref_str}, Range: {rng}km")
                 
                 clipped_polys = []
                 
@@ -908,10 +911,11 @@ def detection_range(
                 specific_out_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Construct filename
-                # rangeplotter-[name]-tgt_alt_[alt]m-det_rng_[rng]km.kml
+                # rangeplotter-[name]-tgt_alt_[alt]m[_ref]-det_rng_[rng]km.kml
                 alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                 rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
-                filename = f"rangeplotter-{base_name}-tgt_alt_{alt_str}m-det_rng_{rng_str}km.kml"
+                ref_suffix = f"_{ref}" if ref else ""
+                filename = f"rangeplotter-{base_name}-tgt_alt_{alt_str}m{ref_suffix}-det_rng_{rng_str}km.kml"
                 kml_doc_name = filename.replace(".kml", "")
                 
                 sensors_list = []
