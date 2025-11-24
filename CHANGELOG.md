@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added human-readable duration (e.g., `1h 23m`) to execution time summaries.
 - Added `--verbose` / `-v` flag to `detection-range` command for detailed logging of parsing and processing steps.
 - Added debug logging for geometry clipping and union operations.
+- Implemented smart input file resolution: if a file is not found in the current directory, the CLI now checks `working_files/input` (for `viewshed`) or `working_files/viewshed` (for `detection-range`).
 
 ### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.

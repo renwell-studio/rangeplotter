@@ -84,7 +84,13 @@ def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
         return list(input_dir.glob("*.kml"))
     elif input_path.is_dir():
         return list(input_path.glob("*.kml"))
+    elif input_path.exists():
+        return [input_path]
     else:
+        # Check fallback in default input directory
+        fallback = default_input_dir / input_path.name
+        if fallback.exists():
+            return [fallback]
         return [input_path]
 
 def _load_radars(kml_files: List[Path], sensor_height: float) -> List:
@@ -346,7 +352,7 @@ def horizon(
 @app.command()
 def viewshed(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory containing KML file(s) with sensor location(s)"),
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/input/."),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
@@ -688,8 +694,8 @@ def viewshed(
 @app.command()
 def detection_range(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
-    input_files: Optional[List[str]] = typer.Option(None, "--input", "-i", help="Input viewshed KML files (supports wildcards)"),
-    extra_files: Optional[List[str]] = typer.Argument(None, help="Additional input files (supports wildcards)"),
+    input_files: Optional[List[str]] = typer.Option(None, "--input", "-i", help="Input viewshed KML files (supports wildcards). If not found, checks working_files/viewshed/."),
+    extra_files: Optional[List[str]] = typer.Argument(None, help="Additional input files (supports wildcards). If not found, checks working_files/viewshed/."),
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(default_detection_dir, "--output", "-o", help="Output directory"),
@@ -729,7 +735,12 @@ def detection_range(
         if "*" in inp or "?" in inp or "[" in inp:
             matches = glob.glob(inp)
             if not matches:
-                typer.echo(f"[yellow]Warning: No files matched pattern {inp}[/yellow]")
+                # Try fallback dir
+                fallback_pattern = str(default_viewshed_dir / inp)
+                matches = glob.glob(fallback_pattern)
+                
+            if not matches:
+                typer.echo(f"[yellow]Warning: No files matched pattern {inp} (checked CWD and {default_viewshed_dir})[/yellow]")
             for m in matches:
                 p = Path(m)
                 if p.is_file():
@@ -738,13 +749,15 @@ def detection_range(
             p = Path(inp)
             if p.exists() and p.is_file():
                 resolved_files.append(p)
-            elif p.is_dir():
-                 # If user passed a dir, maybe they meant all kmls in it?
-                 # But standard behavior for --input file is usually strict.
-                 # Let's just warn if it's a dir and not a file.
-                 typer.echo(f"[yellow]Warning: {inp} is a directory. Skipping.[/yellow]")
             else:
-                typer.echo(f"[yellow]Warning: File {inp} not found.[/yellow]")
+                # Check fallback
+                fallback = default_viewshed_dir / p.name
+                if fallback.exists() and fallback.is_file():
+                    resolved_files.append(fallback)
+                elif p.is_dir():
+                     typer.echo(f"[yellow]Warning: {inp} is a directory. Skipping.[/yellow]")
+                else:
+                    typer.echo(f"[yellow]Warning: File {inp} not found (checked CWD and {default_viewshed_dir}).[/yellow]")
     
     if not resolved_files:
         typer.echo("[red]No valid input files provided.[/red]")
