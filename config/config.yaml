@@ -31,7 +31,7 @@ altitudes_msl_m: [0]
 # Options:
 #   - "msl": Mean Sea Level (Absolute altitude). Targets below terrain are invisible.
 #   - "agl": Above Ground Level (Relative to terrain). Target altitude is added to terrain height.
-target_altitude_reference: "msl"
+target_altitude_reference: "agl"
 
 # Height of the sensor above ground level (AGL) in meters.
 sensor_height_m_agl: 5.0
