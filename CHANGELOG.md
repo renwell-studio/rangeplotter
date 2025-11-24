@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Achieved >86% code coverage across all modules.
 - Added tests for interactive CLI prompts, authentication flows, and DEM caching logic.
 - Added tests for complex KML geometries (MultiGeometry, holes in polygons).
+- Included `example.env` in the distribution to help users configure authentication.
+- Improved authentication error messages with actionable guidance.
 
 ### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.

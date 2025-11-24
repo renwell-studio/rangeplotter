@@ -10,8 +10,10 @@ def test_viewshed_check_download_interactive_yes(tmp_path):
     with patch("rangeplotter.cli.main.Settings.from_file") as mock_settings, \
          patch("rangeplotter.cli.main._load_radars") as mock_load_radars, \
          patch("rangeplotter.cli.main.DemClient") as MockDemClient, \
+         patch("rangeplotter.cli.main.CdseAuth") as MockAuth, \
          patch("typer.confirm") as mock_confirm:
          
+        MockAuth.return_value.ensure_access_token.return_value = "token"
         settings = mock_settings.return_value
         settings.logging = {}
         settings.cache_dir = str(tmp_path / "cache")
@@ -54,8 +56,10 @@ def test_viewshed_check_download_interactive_no(tmp_path):
     with patch("rangeplotter.cli.main.Settings.from_file") as mock_settings, \
          patch("rangeplotter.cli.main._load_radars") as mock_load_radars, \
          patch("rangeplotter.cli.main.DemClient") as MockDemClient, \
+         patch("rangeplotter.cli.main.CdseAuth") as MockAuth, \
          patch("typer.confirm") as mock_confirm:
          
+        MockAuth.return_value.ensure_access_token.return_value = "token"
         settings = mock_settings.return_value
         settings.logging = {}
         settings.cache_dir = str(tmp_path / "cache")

@@ -139,6 +139,7 @@ mkdir -p "$RELEASE_DIR/data_cache"
 cp dist/rangeplotter "$RELEASE_DIR/"
 cp config/config.yaml "$RELEASE_DIR/config/"
 cp README.md LICENSE "$RELEASE_DIR/"
+cp example.env "$RELEASE_DIR/"
 cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
 
 # Zip

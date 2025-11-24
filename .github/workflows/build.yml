@@ -47,7 +47,7 @@ jobs:
         cp config/config.yaml "$RELEASE_DIR/config/"
         
         # Copy Docs
-        cp README.md LICENSE "$RELEASE_DIR/"
+        cp README.md LICENSE example.env "$RELEASE_DIR/"
         
         # Copy Sample Data
         cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
