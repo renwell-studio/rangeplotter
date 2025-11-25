@@ -403,7 +403,7 @@ def viewshed(
     from rich.console import Console
     console = Console()
     log = setup_logging(settings.logging, verbose=verbose, console=console)
-    altitudes = settings.effective_altitudes
+    altitudes = sorted(settings.effective_altitudes)
     
     kml_files = _resolve_inputs(input_path)
     if not kml_files:
@@ -608,7 +608,7 @@ def viewshed(
                     # print(f"Keys: {list(radar_map.keys())}")
                     continue
                 
-                for alt in altitudes:
+                for i, alt in enumerate(altitudes, 1):
                     prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
                     calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
                     
@@ -647,7 +647,8 @@ def viewshed(
                         
                         # Include reference in filename
                         ref_str = altitude_mode.upper()
-                        filename = f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
+                        prefix = f"{i:02d}_"
+                        filename = f"{prefix}viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
                         out_path = out_dir_path / filename
                         
                         # Merge sensor style with default style
@@ -783,6 +784,8 @@ def detection_range(
         else:
             typer.echo("[red]No detection ranges provided via CLI or config.[/red]")
             raise typer.Exit(code=1)
+    
+    final_ranges.sort()
 
     # Parse inputs
     if verbose >= 1:
@@ -850,7 +853,11 @@ def detection_range(
         total_steps = len(by_alt_ref) * len(final_ranges)
         task = prog.add_task("Processing detection ranges...", total=total_steps)
         
-        for (alt, ref), items in by_alt_ref.items():
+        # Sort by altitude
+        sorted_keys = sorted(by_alt_ref.keys(), key=lambda x: x[0])
+        
+        for i, (alt, ref) in enumerate(sorted_keys, 1):
+            items = by_alt_ref[(alt, ref)]
             ref_str = f" ({ref})" if ref else ""
             for rng in final_ranges:
                 if verbose >= 2:
@@ -915,7 +922,8 @@ def detection_range(
                 alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                 rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
                 ref_suffix = f"_{ref}" if ref else ""
-                filename = f"rangeplotter-{base_name}-tgt_alt_{alt_str}m{ref_suffix}-det_rng_{rng_str}km.kml"
+                prefix = f"{i:02d}_"
+                filename = f"{prefix}rangeplotter-{base_name}-tgt_alt_{alt_str}m{ref_suffix}-det_rng_{rng_str}km.kml"
                 kml_doc_name = filename.replace(".kml", "")
                 
                 sensors_list = []

@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added debug logging for geometry clipping and union operations.
 - Implemented smart input file resolution: if a file is not found in the current directory, the CLI now checks `working_files/input` (for `viewshed`) or `working_files/viewshed` (for `detection-range`).
 - `detection-range` now preserves `_MSL` or `_AGL` filename suffixes from input files, ensuring the vertical datum reference is maintained in the output filenames.
+- Added sequential numbering prefixes (e.g., `01_`, `02_`) to `viewshed` and `detection-range` output filenames. Files are now sorted by target altitude to ensure correct ordering when imported into Google Earth.
+
+### Changed
+- Added sequential numbering prefixes (e.g., `01_`, `02_`) to `viewshed` and `detection-range` output filenames. Files are now sorted by target altitude to ensure correct ordering when imported into Google Earth.
 
 ### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.
