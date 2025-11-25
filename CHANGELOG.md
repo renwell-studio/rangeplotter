@@ -22,14 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added sequential numbering prefixes (e.g., `01_`, `02_`) to `viewshed` and `detection-range` output filenames. Files are now sorted by target altitude to ensure correct ordering when imported into Google Earth.
 
 ### Changed
-- Added sequential numbering prefixes (e.g., `01_`, `02_`) to `viewshed` and `detection-range` output filenames. Files are now sorted by target altitude to ensure correct ordering when imported into Google Earth.
-
-### Changed
 - Renamed default log file from `visibility.log` to `rangeplotter.log`.
 - Updated output KML filenames to use `rangeplotter-` prefix instead of `visibility-`.
 - Standardized internal naming conventions to "RangePlotter".
 
 ### Fixed
+- Fixed XML parsing error in Google Earth when sensor names or filenames contain special characters (e.g., `&`). Names are now properly escaped in the generated KML.
 - Fixed various edge cases in KML parsing and export logic discovered during testing.
 - Fixed potential issues with DEM tile download and caching resilience.
 

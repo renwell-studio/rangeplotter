@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Dict, List, Tuple, Union, Optional
+from typing import Dict, List, Tuple, Union, Optional, Any
 import math
 from pathlib import Path
 from pyproj import Geod
 from shapely.geometry import Polygon, MultiPolygon, Point
+from xml.sax.saxutils import escape
 
 KML_HEADER = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>"""
 KML_FOOTER = "</Document></kml>"
@@ -64,7 +65,7 @@ def export_viewshed_kml(
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{document_name}</name>',
+        f'    <name>{escape(document_name)}</name>',
     ]
     
     # Generate styles for each sensor
@@ -113,7 +114,7 @@ def export_viewshed_kml(
         loc = sensor['location']
         kml_content.extend([
             '      <Placemark>',
-            f'        <name>{name}</name>',
+            f'        <name>{escape(name)}</name>',
             f'        <styleUrl>#sensorStyle_{i}</styleUrl>',
             '        <Point>',
             f'          <coordinates>{loc[0]},{loc[1]},0</coordinates>',
@@ -156,7 +157,7 @@ def export_viewshed_kml(
 
     kml_content.extend([
         '      <Placemark>',
-        f'        <name>{poly_name}</name>',
+        f'        <name>{escape(poly_name)}</name>',
         '        <styleUrl>#polyStyle</styleUrl>',
         '        <MultiGeometry>'
     ])
@@ -246,7 +247,7 @@ def export_kml_polygon(
       </PolyStyle>
     </Style>
     <Placemark>
-      <name>{name}</name>
+      <name>{escape(name)}</name>
       <styleUrl>#polyStyle</styleUrl>
       <MultiGeometry>
 """
@@ -364,12 +365,12 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
         lon, lat = radars_meta[radar_name]
         
         kml_content.append('    <Folder>')
-        kml_content.append(f'      <name>{radar_name}</name>')
+        kml_content.append(f'      <name>{escape(radar_name)}</name>')
         
         # Sensor Placemark
         kml_content.extend([
             '      <Placemark>',
-            f'        <name>{radar_name}</name>',
+            f'        <name>{escape(radar_name)}</name>',
             '        <styleUrl>#sensorStyle</styleUrl>',
             '        <Point>',
             f'          <coordinates>{lon},{lat},0</coordinates>',
@@ -432,7 +433,7 @@ def export_combined_kml(
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{document_name}</name>'
+        f'    <name>{escape(document_name)}</name>'
     ]
     
     # Add extracted styles
@@ -468,13 +469,13 @@ def export_combined_kml(
         indent = "    "
         if use_folders:
             kml_content.append(f'{indent}<Folder>')
-            kml_content.append(f'{indent}  <name>{radar.name}</name>')
+            kml_content.append(f'{indent}  <name>{escape(radar.name)}</name>')
             indent += "  "
             
         # Sensor Placemark
         style_url = radar.style_url if radar.style_url else "#defaultSensorStyle"
         kml_content.append(f'{indent}<Placemark>')
-        kml_content.append(f'{indent}  <name>{radar.name}</name>')
+        kml_content.append(f'{indent}  <name>{escape(radar.name)}</name>')
         if radar.description:
              # Wrap description in CDATA to handle HTML content safely
              kml_content.append(f'{indent}  <description><![CDATA[{radar.description}]]></description>')
