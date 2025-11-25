@@ -648,7 +648,7 @@ def viewshed(
                         # Include reference in filename
                         ref_str = altitude_mode.upper()
                         prefix = f"{i:02d}_"
-                        filename = f"{prefix}viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
+                        filename = f"{prefix}rangeplotter-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
                         out_path = out_dir_path / filename
                         
                         # Merge sensor style with default style

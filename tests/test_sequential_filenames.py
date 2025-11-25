@@ -155,6 +155,6 @@ def test_viewshed_sequential_numbering(tmp_path, mock_dem_client, mock_compute_v
     filenames_str = " ".join(output_filenames)
     
     # Should be sorted: 50, 100, 200
-    assert "01_viewshed-TestSensor-tgt_alt_50m" in filenames_str
-    assert "02_viewshed-TestSensor-tgt_alt_100m" in filenames_str
-    assert "03_viewshed-TestSensor-tgt_alt_200m" in filenames_str
+    assert "01_rangeplotter-TestSensor-tgt_alt_50m" in filenames_str
+    assert "02_rangeplotter-TestSensor-tgt_alt_100m" in filenames_str
+    assert "03_rangeplotter-TestSensor-tgt_alt_200m" in filenames_str
