@@ -18,7 +18,7 @@ import time
 import re
 import yaml
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 app = typer.Typer(help="Radar LOS utility scaffold", context_settings={"help_option_names": ["-h", "--help"]})
 print("RangePlotter by Renwell | Licence: MIT | Support: ko-fi.com/renwell")
