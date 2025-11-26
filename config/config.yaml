@@ -33,6 +33,14 @@ altitudes_msl_m: [0]
 #   - "agl": Above Ground Level (Relative to terrain). Target altitude is added to terrain height.
 target_altitude_reference: "agl"
 
+# KML Export Altitude Mode
+# Defines how polygons are rendered in Google Earth.
+# Options:
+#   - "clamped": Polygons are clamped to the ground (terrain). Recommended for best visualization.
+#   - "absolute": Polygons are drawn at the calculated target altitude.
+#     (Uses 'absolute' for MSL targets, 'relativeToGround' for AGL targets).
+kml_export_altitude_mode: "clamped"
+
 # Height of the sensor above ground level (AGL) in meters.
 sensor_height_m_agl: 5.0
 

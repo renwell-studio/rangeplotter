@@ -61,6 +61,7 @@ class Settings(BaseModel):
     cache_dir: str = "data_cache"
     altitudes_msl_m: List[float]
     target_altitude_reference: str = Field("msl", pattern="^(msl|agl)$")
+    kml_export_altitude_mode: str = Field("clamped", pattern="^(clamped|absolute)$")
     sensor_height_m_agl: float = 5.0
     atmospheric_k_factor: float = 1.333
     working_crs_strategy: str = Field("auto_aeqd", pattern=r"^(auto_aeqd|manual:EPSG:\d+)$")

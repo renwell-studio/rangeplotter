@@ -338,7 +338,7 @@ def horizon(
     out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
     kml_path = out_path / "horizons.kml"
-    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump())
+    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode)
     if verbose >= 2:
         print("[grey58]DEBUG: Export complete.")
     print(f"[green]Exported horizons to {kml_path}[/green]")
@@ -667,7 +667,8 @@ def viewshed(
                                 'style_config': final_style
                             }],
                             document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
-                            altitude_mode=altitude_mode
+                            altitude_mode=altitude_mode,
+                            kml_export_mode=settings.kml_export_altitude_mode
                         )
                         
                         if verbose >= 1:
@@ -940,7 +941,9 @@ def detection_range(
                     altitude=alt,
                     style_config=style_to_use,
                     sensors=sensors_list,
-                    document_name=kml_doc_name
+                    document_name=kml_doc_name,
+                    altitude_mode=ref if ref else "msl",
+                    kml_export_mode=settings.kml_export_altitude_mode
                 )
                 
                 created_files.append({

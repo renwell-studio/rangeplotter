@@ -33,12 +33,14 @@ def export_viewshed_kml(
     style_config: dict,
     sensors: Optional[List[Dict[str, Any]]] = None,
     document_name: Optional[str] = None,
-    altitude_mode: str = "msl"
+    altitude_mode: str = "msl",
+    kml_export_mode: str = "clamped"
 ) -> None:
     """
     Export a viewshed to a self-contained KML file with sensor location(s) and polygon.
     
     altitude_mode: 'msl' (absolute) or 'agl' (relativeToGround).
+    kml_export_mode: 'clamped' (clampToGround) or 'absolute' (uses altitude_mode).
     """
     # Normalize inputs
     if sensors is None:
@@ -173,9 +175,11 @@ def export_viewshed_kml(
             continue
             
         # Determine KML altitude mode
-        kml_alt_mode = "absolute"
-        if altitude_mode.lower() == "agl":
-            kml_alt_mode = "relativeToGround"
+        kml_alt_mode = "clampToGround"
+        if kml_export_mode == "absolute":
+            kml_alt_mode = "absolute"
+            if altitude_mode.lower() == "agl":
+                kml_alt_mode = "relativeToGround"
             
         # Exterior
         kml_content.append("        <Polygon>")
@@ -288,12 +292,12 @@ def export_kml_polygon(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(content, encoding="utf-8")
 
-def geodesic_circle_coords(lon: float, lat: float, radius_m: float, segments: int = 180) -> List[str]:
+def geodesic_circle_coords(lon: float, lat: float, radius_m: float, segments: int = 180, altitude: float = 0.0) -> List[str]:
     coords: List[str] = []
     for i in range(segments):
         az = (360.0 * i) / segments
         lon2, lat2, _ = GEOD.fwd(lon, lat, az, radius_m)
-        coords.append(f"{lon2},{lat2},0")
+        coords.append(f"{lon2},{lat2},{altitude}")
     coords.append(coords[0])
     return coords
 
@@ -321,7 +325,7 @@ def kml_ring_placemark(name: str, coords: List[str], line_color_hex: str, line_w
         f"<Polygon><outerBoundaryIs><LinearRing><coordinates>{coord_str}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>"
     )
 
-def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], radars_meta: Dict[str, Tuple[float, float]], style: Dict):
+def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], radars_meta: Dict[str, Tuple[float, float]], style: Dict, kml_export_mode: str = "clamped"):
     """
     Export horizon rings to a KML file with shared styles and folder structure.
     """
@@ -380,7 +384,14 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
 
         # Horizon Rings
         for alt, dist_m in entries:
-            coords = geodesic_circle_coords(lon, lat, dist_m)
+            ring_alt = 0.0
+            altitude_mode_tag = "<altitudeMode>clampToGround</altitudeMode>"
+            
+            if kml_export_mode == "absolute":
+                ring_alt = alt
+                altitude_mode_tag = "<altitudeMode>absolute</altitudeMode>"
+
+            coords = geodesic_circle_coords(lon, lat, dist_m, altitude=ring_alt)
             coord_str = " ".join(coords)
             
             alt_label = f"{int(alt)}" if alt.is_integer() else f"{alt}"
@@ -390,6 +401,7 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
                 f'        <name>Horizon ({alt_label}m target altitude)</name>',
                 '        <styleUrl>#horizonStyle</styleUrl>',
                 '        <Polygon>',
+                f'          {altitude_mode_tag}',
                 '          <outerBoundaryIs><LinearRing><coordinates>',
                 f'            {coord_str}',
                 '          </coordinates></LinearRing></outerBoundaryIs>',
