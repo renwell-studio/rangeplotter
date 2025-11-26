@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2025-11-26
+## [0.1.5-rc1] - 2025-11-26
 ### Added
 - **Integrated Network Workflow**: New `network run` command orchestrates the entire pipeline (`viewshed` -> `horizon` -> `detection-range`) in a single step.
 - **Smart Resume**: The system now tracks the state of each simulation (hashing inputs and parameters). Re-running a command will automatically skip viewsheds that have already been calculated with the same parameters, saving significant time.
@@ -14,12 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Interactive Wizard**: The `network run` command features an interactive wizard to guide users through configuration if arguments are omitted. It now includes a review loop, allowing users to revise settings before starting the analysis.
 - **Package Entry Point**: The package can now be run directly via `python -m rangeplotter`.
 - **Examples**: Added `examples/` directory with sample CSV and KML files.
-
-### Changed
-- **Default Output Directory**: The `network run` command now defaults to `working_files/network/{input_name}_{timestamp}` if no output directory is specified, keeping the project workspace organized.
-
-## [0.1.5-rc1] - 2025-11-26
-### Added
 - **Hybrid Distribution Model**: Now releasing both a standalone binary (Linux) and a standard Python Wheel (`.whl`) for cross-platform/developer use.
 - **Graceful Upgrade Script**: Added `install_or_upgrade.sh` to the binary release. This script automates installation and upgrades while preserving user configuration (`config.yaml`) and data.
 - **Release Candidate Workflow**: CI/CD pipeline now supports `-rc` tags (e.g., `v0.1.5-rc1`) for pre-release testing.
@@ -29,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **User Guide**: Added a comprehensive documentation set in `docs/guide/`, covering installation, configuration, commands, and best practices.
 
 ### Changed
+- **Default Output Directory**: The `network run` command now defaults to `working_files/network/{input_name}_{timestamp}` if no output directory is specified, keeping the project workspace organized.
 - Renamed default input directory from `working_files/input` to `working_files/sensor_locations` to better reflect its purpose.
 - Updated `install_or_upgrade.sh` to automatically migrate the legacy `input` directory to `sensor_locations` and update `config.yaml` during upgrades.
 - Streamlined `README.md` to focus on quick start and installation, moving detailed documentation to the new User Guide.
