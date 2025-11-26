@@ -145,13 +145,22 @@ def parse_radars(kml_path: str, default_sensor_height_m: float) -> List[RadarSit
                 alt = float(parts[2])
             except ValueError:
                 alt = None
+        
+        # Determine sensor height logic
+        # If KML specifies relativeToGround and a valid altitude, use that as the sensor height
+        # and set the additional sensor_height_m_agl to 0 to avoid double counting.
+        # Otherwise, use the default sensor height from config.
+        final_sensor_height = default_sensor_height_m
+        if altitude_mode == "relativeToGround" and alt is not None and alt > 0:
+            final_sensor_height = 0.0
+
         radars.append(RadarSite(
             name=name,
             longitude=lon,
             latitude=lat,
             altitude_mode=altitude_mode,
             input_altitude=alt,
-            sensor_height_m_agl=default_sensor_height_m,
+            sensor_height_m_agl=final_sensor_height,
             description=description,
             style_url=style_url,
             style_config=style_config

@@ -42,6 +42,9 @@ target_altitude_reference: "agl"
 kml_export_altitude_mode: "clamped"
 
 # Height of the sensor above ground level (AGL) in meters.
+# This is the default value used for all sensors.
+# If an input KML specifies a sensor altitude (using <altitudeMode>relativeToGround</altitudeMode>),
+# that value will override this setting for that specific sensor.
 sensor_height_m_agl: 5.0
 
 # Atmospheric refraction factor (k-factor).
