@@ -5,6 +5,8 @@ RangePlotter has four main commands. Run `rangeplotter --help` or `rangeplotter 
 ## 1. `network run` (Recommended)
 Orchestrates the complete analysis pipeline (`viewshed` -> `horizon` -> `detection-range`) in a single step.
 
+The interactive wizard now includes a **Site Selection** step. If your input file contains multiple sites, you can choose to process all of them or select a specific subset interactively.
+
 **Usage:**
 ```bash
 # Interactive Wizard Mode
