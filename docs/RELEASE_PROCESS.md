@@ -69,47 +69,55 @@ We follow Semantic Versioning (SemVer). Group changes together rather than relea
 
 ## 3. Release Process
 
-When ready to release a new version (e.g., `v0.1.0`):
+We use a **Release Candidate (RC)** workflow to ensure stability before the final release.
 
-### 1. Update Changelog
-Review `CHANGELOG.md`. Move the content from `[Unreleased]` to a new section `[X.Y.Z] - YYYY-MM-DD`. Ensure all notable changes are captured.
+### Phase 1: Release Candidate (RC)
 
-### 2. Update Version Number
-Update the version string in the following files:
-*   `pyproject.toml`: `version = "X.Y.Z"`
-*   `src/rangeplotter/cli/main.py`: `__version__ = "X.Y.Z"`
+1.  **Update Changelog**:
+    Add a new section `[X.Y.Z-rc1] - YYYY-MM-DD` in `CHANGELOG.md`.
 
-### 3. Commit Version Bump
-```bash
-git add CHANGELOG.md pyproject.toml src/rangeplotter/cli/main.py
-git commit -m "Bump version to vX.Y.Z"
-git push origin main
-```
+2.  **Bump Version (Pre-release)**:
+    *   `pyproject.toml`: `version = "X.Y.Z-rc1"`
+    *   `src/rangeplotter/cli/main.py`: `__version__ = "X.Y.Z-rc1"`
 
-### 4. Tag the Release
-Create an annotated git tag and push it to GitHub.
-```bash
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-### 5. Build & Release (Automated)
-
-The project uses GitHub Actions to automatically build, package, and publish the release when a new tag is pushed.
-
-1.  **Push the Tag**:
-    (As done in Step 4)
+3.  **Tag & Push**:
     ```bash
+    git commit -am "Bump version to vX.Y.Z-rc1"
+    git tag -a vX.Y.Z-rc1 -m "Release Candidate vX.Y.Z-rc1"
+    git push origin vX.Y.Z-rc1
+    ```
+
+4.  **Verify CI/CD**:
+    GitHub Actions will automatically:
+    *   Build the **Linux Binary** (zip).
+    *   Build the **Python Wheel** (.whl) and Source Dist (.tar.gz).
+    *   Create a **Pre-release** on GitHub with these assets.
+
+5.  **Test**:
+    *   Download the artifacts.
+    *   Test the binary upgrade using `install_or_upgrade.sh`.
+    *   Test the wheel installation: `pip install rangeplotter-X.Y.Zrc1-py3-none-any.whl`.
+
+### Phase 2: Final Release
+
+Once the RC is verified:
+
+1.  **Finalize Changelog**:
+    Rename `[X.Y.Z-rc1]` to `[X.Y.Z]`.
+
+2.  **Bump Version (Final)**:
+    *   `pyproject.toml`: `version = "X.Y.Z"`
+    *   `src/rangeplotter/cli/main.py`: `__version__ = "X.Y.Z"`
+
+3.  **Tag & Push**:
+    ```bash
+    git commit -am "Bump version to vX.Y.Z"
+    git tag -a vX.Y.Z -m "Release vX.Y.Z"
     git push origin vX.Y.Z
     ```
 
-2.  **Monitor Action**:
-    *   Go to the **Actions** tab in the GitHub repository.
-    *   Watch the **Build and Release** workflow.
-
-3.  **Verify Release**:
-    *   Once the workflow completes, go to the **Releases** page.
-    *   Verify that `vX.Y.Z` exists and contains the `rangeplotter_vX.Y.Z_linux.zip` asset.
+4.  **Publish**:
+    GitHub Actions will build the final artifacts and create a standard (non-pre-release) GitHub Release.
 
 ---
 
@@ -117,12 +125,18 @@ The project uses GitHub Actions to automatically build, package, and publish the
 
 If the automated pipeline fails or you need to build locally:
 
-### 1. Build Binary
+### 1. Build Binary (PyInstaller)
 ```bash
 pyinstaller rangeplotter.spec --clean --noconfirm
 ```
 
-### 2. Create Archive
+### 2. Build Wheel (Python Build)
+```bash
+python3 -m build
+# Artifacts will be in dist/ (e.g., rangeplotter-X.Y.Z-py3-none-any.whl)
+```
+
+### 3. Create Release Archive (Binary)
 ```bash
 VERSION="vX.Y.Z"
 RELEASE_DIR="release/rangeplotter_${VERSION}_linux"
@@ -139,6 +153,7 @@ mkdir -p "$RELEASE_DIR/data_cache"
 cp dist/rangeplotter "$RELEASE_DIR/"
 cp config/config.yaml "$RELEASE_DIR/config/"
 cp README.md LICENSE "$RELEASE_DIR/"
+cp scripts/install_or_upgrade.sh "$RELEASE_DIR/"
 cp example.env "$RELEASE_DIR/"
 cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
 

@@ -16,6 +16,9 @@ BINARY_NAME="rangeplotter"
 
 echo "Source directory: $SOURCE_DIR"
 
+# Safety Check: We explicitly do NOT touch any user backup files (*.bac, *.backup)
+# throughout this process.
+
 # Default install location
 DEFAULT_INSTALL_DIR="$HOME/rangeplotter"
 

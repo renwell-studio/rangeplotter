@@ -42,6 +42,8 @@ No Python environment required.
     ./install_or_upgrade.sh
     ```
     *This script will make `rangeplotter` executable and ensure your `config/` and `working_files/` are safe.*
+    
+    > **Tip:** While the script is designed to be safe, it is always good practice to backup your important files (e.g., `cp config/config.yaml config/config.yaml.backup`) before performing an upgrade. The installer will strictly ignore any files ending in `.bac` or `.backup`.
 
 4.  **Run**:
     ```bash
