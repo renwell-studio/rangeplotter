@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "rangeplotter"
 version = "0.1.5-rc1"
 description = "Radar line-of-sight terrain visibility utility"
-authors = [{name="Your Name"}]
+authors = [{name="Renwell Studio", email="support@renwell.studio"}]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"

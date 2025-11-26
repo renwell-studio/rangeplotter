@@ -22,6 +22,7 @@ def run(
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Path to project output directory"),
     force: bool = typer.Option(False, "--force", help="Force recalculation even if output exists."),
     filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
+    sensor_heights_cli: Optional[List[str]] = typer.Option(None, "--sensor-heights", "-sh", help="Sensor heights AGL in meters (comma separated). Overrides config."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip interactive confirmation (non-interactive mode)."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level")
 ):
@@ -42,6 +43,20 @@ def run(
     else:
         settings = load_settings()
 
+    # Override sensor heights if provided via CLI
+    if sensor_heights_cli:
+        parsed_heights = []
+        for h_str in sensor_heights_cli:
+            parts = h_str.split(',')
+            for p in parts:
+                try:
+                    parsed_heights.append(float(p.strip()))
+                except ValueError:
+                    print(f"[yellow]Warning: Invalid sensor height value '{p}'. Skipping.[/yellow]")
+        if parsed_heights:
+            settings.sensor_height_m_agl = sorted(list(set(parsed_heights)))
+            print(f"Using sensor heights from CLI: {settings.sensor_height_m_agl}")
+
     # --- Wizard / Interactive Mode ---
     if not yes:
         print(f"\n[bold cyan]RangePlotter Network Analysis Wizard[/bold cyan]")
@@ -51,7 +66,19 @@ def run(
         if not input_path:
             default_input = "examples/radars.csv"
             input_str = Prompt.ask("Input file or directory", default=default_input)
-            input_path = Path(input_str)
+            
+            # Check if file exists in CWD or sensor_locations
+            p = Path(input_str)
+            if p.exists():
+                input_path = p
+            else:
+                # Try sensor_locations
+                p_loc = Path("working_files/sensor_locations") / input_str
+                if p_loc.exists():
+                    input_path = p_loc
+                else:
+                    # Try adding extension if missing? No, keep it simple.
+                    input_path = p # Keep original to fail later or prompt again?
         
         if not input_path.exists():
             print(f"[bold red]Error: Input path '{input_path}' does not exist.[/bold red]")
@@ -240,14 +267,50 @@ def run(
     
     # 1. Run Viewshed
     print("\n[bold]Step 1: Calculating Viewsheds[/bold]")
-    cmd_viewshed = [
-        sys.executable, "-m", "rangeplotter", "viewshed",
-        "--input", str(input_path),
-        "--output", str(viewshed_dir),
-        "--config", str(run_config_path),
-        "--verbose" if verbose > 0 else "",
-    ]
-    if verbose > 1:
+    
+    # Construct command based on execution environment (frozen binary vs python script)
+    if getattr(sys, 'frozen', False):
+        # Running as compiled binary (PyInstaller)
+        # sys.executable is the binary itself
+        # We call the binary directly with the subcommand
+        cmd_viewshed = [
+            sys.executable, "viewshed",
+            "--input", str(input_path),
+            "--output", str(viewshed_dir),
+            "--config", str(run_config_path),
+        ]
+    else:
+        # Running as python script
+        cmd_viewshed = [
+            sys.executable, "-m", "rangeplotter", "viewshed",
+            "--input", str(input_path),
+            "--output", str(viewshed_dir),
+            "--config", str(run_config_path),
+        ]
+
+    # Add optional flags
+    if verbose > 0:
+        cmd_viewshed.append("--verbose")
+        if verbose > 1:
+            cmd_viewshed.append("-v") # Add extra v for debug
+            
+    if force:
+        cmd_viewshed.append("--force")
+        
+    if filter_pattern:
+        cmd_viewshed.extend(["--filter", filter_pattern])
+        
+    # Pass sensor heights if configured (though they are in config, CLI override might be needed if we add that flag)
+    # For now, config handles it.
+    # Wait, if we overrode settings.sensor_height_m_agl via CLI in this process,
+    # we saved it to run_config.yaml.
+    # And we pass run_config.yaml to the subprocess.
+    # So the subprocess WILL pick up the new heights from the config file.
+    # No need to pass --sensor-heights explicitly to the subprocess unless we want to override the config file again.
+    # But the config file IS the source of truth for the run.
+    
+    if verbose > 0:
+        print(f"Running: {' '.join(cmd_viewshed)}")
         cmd_viewshed.append("-vv")
     # Config is now always passed via run_config_path
     # if config:

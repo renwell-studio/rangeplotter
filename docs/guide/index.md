@@ -5,7 +5,8 @@ Welcome to the RangePlotter User Guide. This documentation will help you install
 ## Table of Contents
 
 1.  [Getting Started](getting_started.md)
-    *   Installation
+    *   Installation (Binary)
+    *   [Installation (Pip/Wheel)](pip_install.md)
     *   First Run
     *   Authentication
 2.  [Configuration](configuration.md)
