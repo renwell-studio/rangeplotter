@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Graceful Upgrade Script**: Added `install_or_upgrade.sh` to the binary release. This script automates installation and upgrades while preserving user configuration (`config.yaml`) and data.
 - **Release Candidate Workflow**: CI/CD pipeline now supports `-rc` tags (e.g., `v0.1.5-rc1`) for pre-release testing.
 - **KML Export Altitude Mode**: Added `kml_export_altitude_mode` to `config.yaml`. Defaults to `"clamped"` (clampToGround) for better visualization in Google Earth, with an option for `"absolute"` to render at the calculated target altitude.
+- **Sensor Altitude Override**: The `viewshed` command now respects altitude information in input KMLs. If a sensor uses `<altitudeMode>relativeToGround</altitudeMode>` with a valid altitude, this value overrides the default `sensor_height_m_agl` from `config.yaml` for that specific sensor.
 
 ### Changed
 - Renamed default input directory from `working_files/input` to `working_files/sensor_locations` to better reflect its purpose.
