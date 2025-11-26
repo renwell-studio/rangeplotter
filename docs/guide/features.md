@@ -11,6 +11,13 @@ You can override this for specific sensors directly in your input KML file:
 
 RangePlotter will detect this setting and use 20m as the sensor height for that specific site, while using the default for others.
 
+## Offline Capability
+RangePlotter is designed to be bandwidth-efficient. It checks your local cache for Digital Elevation Model (DEM) tiles before attempting to download them.
+
+*   **Smart Caching**: If you have run a viewshed for a specific area before, the DEM tiles are likely already on your disk.
+*   **Lazy Authentication**: The tool only connects to the Copernicus API if it *needs* to download missing tiles. If all required data is cached, it will not ask for credentials or require an internet connection.
+*   **Offline Field Use**: You can "pre-load" an area by running a viewshed (or using `--download-only`) while online. You can then take your laptop into the field and run new analyses in that same area completely offline.
+
 ## Target Altitude Modes (AGL vs MSL)
 *   **AGL (Above Ground Level)**: The target maintains a constant height above the terrain surface. This is ideal for:
     *   Low-level aircraft / drone detection.

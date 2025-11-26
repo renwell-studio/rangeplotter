@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release Candidate Workflow**: CI/CD pipeline now supports `-rc` tags (e.g., `v0.1.5-rc1`) for pre-release testing.
 - **KML Export Altitude Mode**: Added `kml_export_altitude_mode` to `config.yaml`. Defaults to `"clamped"` (clampToGround) for better visualization in Google Earth, with an option for `"absolute"` to render at the calculated target altitude.
 - **Sensor Altitude Override**: The `viewshed` command now respects altitude information in input KMLs. If a sensor uses `<altitudeMode>relativeToGround</altitudeMode>` with a valid altitude, this value overrides the default `sensor_height_m_agl` from `config.yaml` for that specific sensor.
+- **Offline Capability**: The `viewshed` command now checks for cached DEM tiles before attempting to authenticate with Copernicus. If all required tiles are present locally, the tool runs fully offline without requiring an internet connection or valid credentials.
 - **User Guide**: Added a comprehensive documentation set in `docs/guide/`, covering installation, configuration, commands, and best practices.
 
 ### Changed
