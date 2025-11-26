@@ -41,6 +41,8 @@ def mock_load_radars():
         sensor.longitude = 0.0
         sensor.latitude = 0.0
         sensor.style_config = {}
+        sensor.sensor_height_m_agl = 10.0 # Default single float
+        sensor.radar_height_m_msl = 10.0
         mock.return_value = [sensor]
         yield mock
 
