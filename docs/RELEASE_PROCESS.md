@@ -170,3 +170,59 @@ cd ..
 gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo renwell-studio/rangeplotter --title "${VERSION}" --generate-notes
 ```
 
+---
+
+## Appendix: Testing Release Artifacts
+
+To test packaging and installation workflows without breaking your main development environment, use **Virtual Environments** and **Temporary Directories**.
+
+### 1. Create a Throwaway Virtual Environment
+Isolate code and dependencies.
+
+```bash
+# 1. Go to a temporary location
+cd /tmp
+
+# 2. Create a fresh virtual environment
+python3 -m venv test_env
+
+# 3. Activate it
+source test_env/bin/activate
+```
+
+### 2. Install the Artifact
+Install the wheel built in the `dist/` folder.
+
+```bash
+# Assuming your project is at ~/Documents/Computing/rangeplotter
+pip install ~/Documents/Computing/rangeplotter/dist/rangeplotter-X.Y.Z-py3-none-any.whl
+```
+
+### 3. Test in a Clean Directory
+Isolate data and configuration. Create a fresh folder to act as the "User's Project".
+
+```bash
+mkdir ~/test_project
+cd ~/test_project
+
+# Run the tool
+rangeplotter --version
+```
+
+### 4. Protect Global Config (Optional)
+If testing features that write to global config (e.g., `~/.config/rangeplotter`), override the environment variables to protect your real home directory.
+
+```bash
+export XDG_CONFIG_HOME=/tmp/fake_home/config
+export XDG_CACHE_HOME=/tmp/fake_home/cache
+
+rangeplotter init
+```
+
+### 5. Cleanup
+```bash
+deactivate
+rm -rf /tmp/test_env
+rm -rf ~/test_project
+```
+
