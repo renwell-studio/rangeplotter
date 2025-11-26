@@ -18,6 +18,20 @@ RangePlotter is designed to be bandwidth-efficient. It checks your local cache f
 *   **Lazy Authentication**: The tool only connects to the Copernicus API if it *needs* to download missing tiles. If all required data is cached, it will not ask for credentials or require an internet connection.
 *   **Offline Field Use**: You can "pre-load" an area by running a viewshed (or using `--download-only`) while online. You can then take your laptop into the field and run new analyses in that same area completely offline.
 
+## Smart Resume
+RangePlotter tracks the state of your simulations to avoid redundant work.
+*   **How it works**: Before calculating a viewshed, the system computes a unique "hash" based on the sensor location, target altitude, and physics parameters.
+*   **Benefit**: If you re-run a large network analysis (e.g., after adding a new site or fixing a config error), RangePlotter will instantly skip any viewsheds that have already been successfully calculated with the same parameters.
+*   **Override**: Use the `--force` flag to bypass this check and force a recalculation.
+
+## Integrated Network Workflow
+The `network run` command streamlines the entire process for multi-site networks.
+1.  **Viewshed**: Calculates visibility for all sites.
+2.  **Horizon**: Computes theoretical max ranges.
+3.  **Detection Range**: Clips viewsheds to instrument limits and creates composite coverage maps.
+
+This command also supports an **Interactive Wizard** mode to guide you through the setup if you don't provide command-line arguments.
+
 ## Target Altitude Modes (AGL vs MSL)
 *   **AGL (Above Ground Level)**: The target maintains a constant height above the terrain surface. This is ideal for:
     *   Low-level aircraft / drone detection.
@@ -34,3 +48,17 @@ RangePlotter employs a "multiscale" approach to balance speed and accuracy.
 
 ## Sequential Filenaming
 Output files are automatically prefixed with numbers (e.g., `01_`, `02_`) based on the target altitude. This ensures that when you load a folder of results into Google Earth, they appear in a logical order (lowest altitude to highest).
+
+## Smart Resume
+RangePlotter tracks the state of your simulations to avoid redundant work.
+*   **How it works**: Before calculating a viewshed, the system computes a unique "hash" based on the sensor location, target altitude, and physics parameters.
+*   **Benefit**: If you re-run a large network analysis (e.g., after adding a new site or fixing a config error), RangePlotter will instantly skip any viewsheds that have already been successfully calculated with the same parameters.
+*   **Override**: Use the `--force` flag to bypass this check and force a recalculation.
+
+## Integrated Network Workflow
+The `network run` command streamlines the entire process for multi-site networks.
+1.  **Viewshed**: Calculates visibility for all sites.
+2.  **Horizon**: Computes theoretical max ranges.
+3.  **Detection Range**: Clips viewsheds to instrument limits and creates composite coverage maps.
+
+This command also supports an **Interactive Wizard** mode to guide you through the setup if you don't provide command-line arguments.

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-11-26
+### Added
+- **Integrated Network Workflow**: New `network run` command orchestrates the entire pipeline (`viewshed` -> `horizon` -> `detection-range`) in a single step.
+- **Smart Resume**: The system now tracks the state of each simulation (hashing inputs and parameters). Re-running a command will automatically skip viewsheds that have already been calculated with the same parameters, saving significant time.
+- **CSV Input Support**: Added support for defining radar sites via CSV files (`.csv`) in addition to KML.
+- **Filtering**: Added `--filter` option to `viewshed` and `network` commands to process only specific sites matching a regex pattern.
+- **Interactive Wizard**: The `network run` command features an interactive wizard to guide users through configuration if arguments are omitted.
+- **Package Entry Point**: The package can now be run directly via `python -m rangeplotter`.
+- **Examples**: Added `examples/` directory with sample CSV and KML files.
+
 ## [0.1.5-rc1] - 2025-11-26
 ### Added
 - **Hybrid Distribution Model**: Now releasing both a standalone binary (Linux) and a standard Python Wheel (`.whl`) for cross-platform/developer use.

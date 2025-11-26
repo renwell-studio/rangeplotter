@@ -1,8 +1,29 @@
 # Command Reference
 
-RangePlotter has three main commands. Run `rangeplotter --help` or `rangeplotter [command] --help` for quick reference.
+RangePlotter has four main commands. Run `rangeplotter --help` or `rangeplotter [command] --help` for quick reference.
 
-## 1. `viewshed`
+## 1. `network run` (Recommended)
+Orchestrates the complete analysis pipeline (`viewshed` -> `horizon` -> `detection-range`) in a single step.
+
+**Usage:**
+```bash
+# Interactive Wizard Mode
+rangeplotter network run
+
+# Non-Interactive Mode
+rangeplotter network run --input examples/radars.csv --yes
+```
+
+**Key Options:**
+*   `--input / -i`: Path to input KML/CSV file or directory.
+*   `--output / -o`: Project output directory. Defaults to `working_files/network/{name}_{timestamp}`.
+*   `--filter`: Regex pattern to process only specific sensors (e.g., `--filter "Site A"`).
+*   `--force`: Force recalculation of viewsheds even if they already exist (bypasses Smart Resume).
+*   `--yes / -y`: Skip interactive confirmation.
+
+---
+
+## 2. `viewshed`
 Calculates the actual terrain-aware visibility.
 
 **Usage:**
@@ -11,11 +32,13 @@ rangeplotter viewshed [OPTIONS]
 ```
 
 **Key Options:**
-*   `--input / -i`: Path to input KML file or directory. Defaults to `working_files/sensor_locations`.
+*   `--input / -i`: Path to input KML/CSV file or directory. Defaults to `working_files/sensor_locations`.
 *   `--output / -o`: Output directory.
 *   `--altitudes / -a`: Comma-separated list of target altitudes to calculate (overrides config).
     *   *Example*: `-a 50,100,500`
 *   `--reference / --ref`: Set target altitude reference (`agl` or `msl`).
+*   `--filter`: Regex pattern to filter sensors.
+*   `--force`: Force recalculation.
 *   `--download-only`: Download required DEM tiles but skip calculation.
 *   `--check`: Check if tiles are available locally without downloading.
 
@@ -24,7 +47,7 @@ Generates one KML file per sensor per target altitude (e.g., `01_rangeplotter-Si
 
 ---
 
-## 2. `horizon`
+## 3. `horizon`
 Calculates the theoretical maximum geometric horizon (range rings) based on Earth curvature and sensor height, ignoring terrain.
 
 **Usage:**
@@ -37,7 +60,7 @@ Generates a `horizons.kml` file containing range rings for all sensors at the co
 
 ---
 
-## 3. `detection-range`
+## 4. `detection-range`
 Post-processes viewsheds to clip them to specific maximum ranges (e.g., representing radar instrument limits).
 
 **Usage:**
