@@ -12,6 +12,10 @@ RangePlotter is a command line, python-based geospatial utility designed to calc
 
 ---
 
+## Documentation
+
+For a comprehensive guide on how to use RangePlotter, including configuration details, command reference, and best practices, please see the **[User Guide](docs/guide/index.md)**.
+
 ## Quick Start Guide
 
 1. Install

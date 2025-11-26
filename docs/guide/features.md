@@ -1,0 +1,29 @@
+# Key Features
+
+## Sensor Altitude Override
+By default, RangePlotter uses the `sensor_height_m_agl` setting in `config.yaml` (default 5m) for all sensors.
+
+You can override this for specific sensors directly in your input KML file:
+1.  In Google Earth, open the **Properties** of the Placemark.
+2.  Go to the **Altitude** tab.
+3.  Change "Altitude" to **Relative to ground**.
+4.  Enter the desired sensor height (e.g., `20` meters).
+
+RangePlotter will detect this setting and use 20m as the sensor height for that specific site, while using the default for others.
+
+## Target Altitude Modes (AGL vs MSL)
+*   **AGL (Above Ground Level)**: The target maintains a constant height above the terrain surface. This is ideal for:
+    *   Low-level aircraft / drone detection.
+    *   Ground-based comms coverage.
+    *   *Result*: The viewshed follows the contours of valleys and hills.
+*   **MSL (Mean Sea Level)**: The target is at a fixed barometric altitude. This is ideal for:
+    *   High-altitude aircraft.
+    *   *Result*: The target may crash into terrain if the ground elevation exceeds the target altitude.
+
+## Multiscale Processing
+RangePlotter employs a "multiscale" approach to balance speed and accuracy.
+*   **Near Field (< 20km)**: Uses full 30m resolution DEM data. Critical for accurate local horizon masking.
+*   **Far Field (> 20km)**: Uses downsampled (90m) data. At these distances, small terrain features have less impact on line-of-sight, and the speedup is significant.
+
+## Sequential Filenaming
+Output files are automatically prefixed with numbers (e.g., `01_`, `02_`) based on the target altitude. This ensures that when you load a folder of results into Google Earth, they appear in a logical order (lowest altitude to highest).
