@@ -14,6 +14,9 @@ from rangeplotter.auth.cdse import CdseAuth
 from rangeplotter.utils.logging import setup_logging, log_memory_usage
 from rangeplotter.processing import clip_viewshed, union_viewsheds
 from rangeplotter.io.export import export_viewshed_kml
+from rangeplotter.io.csv_input import parse_csv_radars
+from rangeplotter.utils.state import StateManager
+from rangeplotter.cli import network
 import time
 import re
 import yaml
@@ -21,6 +24,7 @@ import yaml
 __version__ = "0.1.4"
 
 app = typer.Typer(help="Radar LOS utility scaffold", context_settings={"help_option_names": ["-h", "--help"]})
+app.add_typer(network.app, name="network")
 print("RangePlotter by Renwell | Licence: MIT | Support: ko-fi.com/renwell")
 
 def version_callback(value: bool):
@@ -75,15 +79,15 @@ def format_duration(seconds: float) -> str:
     return " ".join(parts)
 
 def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
-    """Resolve input path to a list of KML files."""
+    """Resolve input path to a list of KML or CSV files."""
     if input_path is None:
         # Default to configured input directory
         input_dir = default_input_dir
         if not input_dir.exists():
             return []
-        return list(input_dir.glob("*.kml"))
+        return list(input_dir.glob("*.kml")) + list(input_dir.glob("*.csv"))
     elif input_path.is_dir():
-        return list(input_path.glob("*.kml"))
+        return list(input_path.glob("*.kml")) + list(input_path.glob("*.csv"))
     elif input_path.exists():
         return [input_path]
     else:
@@ -93,15 +97,23 @@ def _resolve_inputs(input_path: Optional[Path]) -> List[Path]:
             return [fallback]
         return [input_path]
 
-def _load_radars(kml_files: List[Path], sensor_height: float) -> List:
-    """Load radars from multiple KML files."""
+def _load_radars(input_files: List[Path], sensor_height: float) -> List:
+    """Load radars from multiple KML or CSV files."""
     all_radars = []
-    for kml_file in kml_files:
-        if not kml_file.exists():
-            typer.echo(f"[yellow]Warning: Input file {kml_file} not found.[/yellow]")
+    for file_path in input_files:
+        if not file_path.exists():
+            typer.echo(f"[yellow]Warning: Input file {file_path} not found.[/yellow]")
             continue
-        radars = parse_radars(str(kml_file), sensor_height)
-        all_radars.extend(radars)
+            
+        if file_path.suffix.lower() == '.kml':
+            radars = parse_radars(str(file_path), sensor_height)
+            all_radars.extend(radars)
+        elif file_path.suffix.lower() == '.csv':
+            radars = parse_csv_radars(file_path, sensor_height)
+            all_radars.extend(radars)
+        else:
+            typer.echo(f"[yellow]Warning: Unsupported file type {file_path.suffix} for {file_path.name}[/yellow]")
+            
     return all_radars
 
 @app.command()
@@ -146,7 +158,7 @@ def prepare_dem(
         raise typer.Exit(code=1)
         
     radars = _load_radars(kml_files, settings.sensor_height_m_agl)
-    
+
     auth = CdseAuth(
         token_url=settings.copernicus_api.token_url,
         client_id=settings.copernicus_api.client_id or "cdse-public",
@@ -358,6 +370,8 @@ def viewshed(
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
     check_download: bool = typer.Option(False, "--check-download", "--check", help="Check download requirements without downloading full dataset."),
+    force: bool = typer.Option(False, "--force", help="Force recalculation even if output exists and matches state."),
+    filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -411,6 +425,19 @@ def viewshed(
         raise typer.Exit(code=1)
         
     radars = _load_radars(kml_files, settings.sensor_height_m_agl)
+    
+    if filter_pattern:
+        import re
+        try:
+            pattern = re.compile(filter_pattern)
+            radars = [r for r in radars if pattern.search(r.name)]
+            if not radars:
+                typer.echo(f"[yellow]No sensors matched filter '{filter_pattern}'.[/yellow]")
+                raise typer.Exit(code=0)
+            typer.echo(f"Filtered to {len(radars)} sensors matching '{filter_pattern}'")
+        except re.error as e:
+            typer.echo(f"[red]Invalid regex pattern: {e}[/red]")
+            raise typer.Exit(code=1)
     
     auth = CdseAuth(
         token_url=settings.copernicus_api.token_url,
@@ -574,6 +601,9 @@ def viewshed(
     if mem.percent > max_ram_percent:
         print(f"[yellow]WARNING: System memory is already at {mem.percent}%. This may cause instability.[/yellow]")
 
+    # Initialize state manager
+    state_manager = StateManager(out_dir_path)
+
     with progress.Progress(
         progress.SpinnerColumn(),
         progress.TextColumn("[progress.description]{task.description}"),
@@ -582,100 +612,101 @@ def viewshed(
         progress.TimeRemainingColumn(),
         console=console
     ) as prog:
-        # Estimate total steps (files * radars * altitudes)
+        # Estimate total steps (radars * altitudes)
         total_steps = len(radars) * len(altitudes) * 100
         overall_task = prog.add_task("Computing viewsheds...", total=total_steps)
         
         current_step = 0
         
-        for kml_file in kml_files:
-            file_radars_raw = parse_radars(str(kml_file), settings.sensor_height_m_agl)
-            
-            for r_raw in file_radars_raw:
-                # Find the populated radar object (with elevation data)
-                sensor = radar_map.get((r_raw.longitude, r_raw.latitude))
-                if not sensor:
-                    prog.console.print(f"[red]Could not find sensor for {r_raw.name} at {r_raw.longitude}, {r_raw.latitude}[/red]")
-                    # Debug keys
-                    # print(f"Keys: {list(radar_map.keys())}")
-                    continue
+        for sensor in radars:
+            for i, alt in enumerate(altitudes, 1):
+                # Prepare filename to check state
+                safe_name = sensor.name.replace(" ", "_").replace("/", "-")
+                alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+                altitude_mode = settings.target_altitude_reference
+                ref_str = altitude_mode.upper()
+                prefix = f"{i:02d}_"
+                filename = f"{prefix}rangeplotter-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
                 
-                for i, alt in enumerate(altitudes, 1):
-                    prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
-                    calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
-                    
-                    def _update_progress(step: str, pct: float):
-                        pct = max(0.0, min(100.0, pct))
-                        prog.update(calc_task, description=f"  {step}...", completed=pct)
-                        
-                        task_progress = 0.0
-                        if step == "Initializing": task_progress = 5.0
-                        elif step == "Computing LOS": task_progress = 10.0 + (pct * 0.6)
-                        elif step == "Generating Mask": task_progress = 70.0 + (pct * 0.2)
-                        elif step == "Vectorizing": task_progress = 90.0
-                        elif step == "Transforming to WGS84": task_progress = 95.0
-                        
-                        prog.update(overall_task, completed=current_step + task_progress)
+                # Compute hash
+                current_hash = state_manager.compute_hash(sensor, alt, settings.atmospheric_k_factor)
+                
+                if not force and not state_manager.should_run(sensor.name, alt, current_hash, filename):
+                    if verbose >= 1:
+                        prog.console.print(f"[dim]Skipping {sensor.name} @ {alt}m (already exists)[/dim]")
+                    prog.update(overall_task, completed=current_step + 100)
+                    current_step += 100
+                    continue
 
-                    try:
-                        if verbose >= 2:
-                            log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
+                prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
+                calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
+                
+                def _update_progress(step: str, pct: float):
+                    pct = max(0.0, min(100.0, pct))
+                    prog.update(calc_task, description=f"  {step}...", completed=pct)
+                    
+                    task_progress = 0.0
+                    if step == "Initializing": task_progress = 5.0
+                    elif step == "Computing LOS": task_progress = 10.0 + (pct * 0.6)
+                    elif step == "Generating Mask": task_progress = 70.0 + (pct * 0.2)
+                    elif step == "Vectorizing": task_progress = 90.0
+                    elif step == "Transforming to WGS84": task_progress = 95.0
+                    
+                    prog.update(overall_task, completed=current_step + task_progress)
+
+                try:
+                    if verbose >= 2:
+                        log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
+                    
+                    cfg_dict = settings.model_dump()
+                    poly = compute_viewshed(
+                        sensor, 
+                        alt, 
+                        dem_client, 
+                        cfg_dict, 
+                        progress_callback=_update_progress, 
+                        rich_progress=prog,
+                        altitude_mode=altitude_mode
+                    )
+                    
+                    out_path = out_dir_path / filename
+                    
+                    # Merge sensor style with default style
+                    final_style = settings.style.model_dump()
+                    if sensor.style_config:
+                        final_style.update(sensor.style_config)
+                    
+                    export_viewshed_kml(
+                        viewshed_polygon=poly,
+                        output_path=out_path,
+                        altitude=alt,
+                        style_config=final_style,
+                        sensors=[{
+                            'name': sensor.name,
+                            'location': (sensor.longitude, sensor.latitude),
+                            'style_config': final_style
+                        }],
+                        document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
+                        altitude_mode=altitude_mode,
+                        kml_export_mode=settings.kml_export_altitude_mode
+                    )
+                    
+                    if verbose >= 1:
+                        prog.console.print(f"    [green]Saved {filename}[/green]")
+                    
+                    if verbose >= 2:
+                        log_memory_usage(log, f"After {sensor.name} @ {alt}m")
+                    
+                    # Update state
+                    state_manager.update_state(sensor.name, alt, current_hash)
                         
-                        cfg_dict = settings.model_dump()
-                        altitude_mode = settings.target_altitude_reference
-                        poly = compute_viewshed(
-                            sensor, 
-                            alt, 
-                            dem_client, 
-                            cfg_dict, 
-                            progress_callback=_update_progress, 
-                            rich_progress=prog,
-                            altitude_mode=altitude_mode
-                        )
-                        
-                        # Export individual KML
-                        safe_name = sensor.name.replace(" ", "_").replace("/", "-")
-                        alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
-                        
-                        # Include reference in filename
-                        ref_str = altitude_mode.upper()
-                        prefix = f"{i:02d}_"
-                        filename = f"{prefix}rangeplotter-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
-                        out_path = out_dir_path / filename
-                        
-                        # Merge sensor style with default style
-                        final_style = settings.style.model_dump()
-                        if sensor.style_config:
-                            final_style.update(sensor.style_config)
-                        
-                        export_viewshed_kml(
-                            viewshed_polygon=poly,
-                            output_path=out_path,
-                            altitude=alt,
-                            style_config=final_style,
-                            sensors=[{
-                                'name': sensor.name,
-                                'location': (sensor.longitude, sensor.latitude),
-                                'style_config': final_style
-                            }],
-                            document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
-                            altitude_mode=altitude_mode,
-                            kml_export_mode=settings.kml_export_altitude_mode
-                        )
-                        
-                        if verbose >= 1:
-                            prog.console.print(f"    [green]Saved {filename}[/green]")
-                        
-                        if verbose >= 2:
-                            log_memory_usage(log, f"After {sensor.name} @ {alt}m")
-                            
-                    except Exception as e:
-                        log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
-                        prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
-                    finally:
-                        prog.remove_task(calc_task)
-                        current_step += 100
-                        prog.update(overall_task, completed=current_step)
+                except Exception as e:
+                    log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
+                    prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
+                finally:
+                    prog.remove_task(calc_task)
+                    current_step += 100
+                    prog.update(overall_task, completed=current_step)
             
     print("[green]Viewshed computation complete.[/green]")
     

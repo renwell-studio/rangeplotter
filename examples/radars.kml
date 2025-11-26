@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Example Radar Sites</name>
+    <Placemark>
+      <name>Site Delta</name>
+      <description>Example site in KML format</description>
+      <Point>
+        <coordinates>13.4050,52.5200,30</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Site Epsilon</name>
+      <Point>
+        <coordinates>-3.7038,40.4168,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>
