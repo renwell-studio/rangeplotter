@@ -1,10 +1,14 @@
 from rangeplotter.config.settings import Settings, load_settings
+from rangeplotter.io.kml import parse_radars
+from rangeplotter.io.csv_input import parse_csv_radars
+from rangeplotter.models.radar_site import RadarSite
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
 import datetime
 import typer
 import subprocess
 import sys
+import csv
 from pathlib import Path
 from typing import Optional, List
 from rich import print
@@ -62,6 +66,69 @@ def run(
             
             output_str = Prompt.ask("Output directory", default=default_output)
             output_dir = Path(output_str)
+
+        # --- Site Selection ---
+        if input_path.is_file():
+            all_sites = []
+            if input_path.suffix.lower() == '.kml':
+                all_sites = parse_radars(str(input_path), settings.sensor_height_m_agl)
+            elif input_path.suffix.lower() == '.csv':
+                all_sites = parse_csv_radars(input_path, settings.sensor_height_m_agl)
+                
+            selected_sites = all_sites
+            if all_sites:
+                print(f"\n[bold]Found {len(all_sites)} sites in input.[/bold]")
+                if Confirm.ask("Do you want to select specific sites to process?", default=False):
+                    # Show table
+                    table = Table(show_header=True, header_style="bold magenta")
+                    table.add_column("#", style="dim")
+                    table.add_column("Name")
+                    table.add_column("Location")
+                    
+                    for idx, site in enumerate(all_sites):
+                        table.add_row(str(idx+1), site.name, f"{site.latitude:.4f}, {site.longitude:.4f}")
+                    print(table)
+                    
+                    while True:
+                        selection_str = Prompt.ask("Enter site numbers to process (comma-separated, e.g. 1,3,5)")
+                        try:
+                            indices = [int(x.strip()) - 1 for x in selection_str.split(",") if x.strip()]
+                            if not indices:
+                                raise ValueError
+                            selected_sites = [all_sites[i] for i in indices if 0 <= i < len(all_sites)]
+                            if not selected_sites:
+                                print("[red]No valid sites selected. Please try again.[/red]")
+                                continue
+                            break
+                        except (ValueError, IndexError):
+                            print("[red]Invalid selection. Please enter comma-separated numbers.[/red]")
+
+            # Generate CSV if subset selected or KML input (to standardize)
+            if selected_sites and (len(selected_sites) < len(all_sites) or input_path.suffix.lower() == '.kml'):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.datetime.now().strftime("%H%M%S")
+                generated_csv_path = output_dir / f"site_selection_{timestamp}.csv"
+                
+                print(f"[dim]Generating site list CSV: {generated_csv_path}[/dim]")
+                
+                with open(generated_csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Name', 'Latitude', 'Longitude', 'Height_AGL'])
+                    for site in selected_sites:
+                        # Determine Height AGL
+                        h_val = ""
+                        if site.altitude_mode == 'relativeToGround':
+                            h_val = site.input_altitude if site.input_altitude is not None else 0.0
+                        else:
+                            # clampToGround
+                            # If it matches the default used for parsing, leave empty to allow dynamic default
+                            if site.sensor_height_m_agl != settings.sensor_height_m_agl:
+                                h_val = site.sensor_height_m_agl
+                        
+                        writer.writerow([site.name, site.latitude, site.longitude, h_val])
+                
+                # Update input_path to use the new CSV
+                input_path = generated_csv_path
 
         while True:
             # 3. Configure Settings
