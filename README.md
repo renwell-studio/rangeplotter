@@ -24,8 +24,6 @@ For a comprehensive guide on how to use RangePlotter, including configuration de
 4. Run './rangeplotter viewshed' to calculate the viewshed around your placemark
 5. Import the output .kml file to Google Earth to see your viewshed
 
-See below for lots more detail...
-
 ---
 
 ## Installation
@@ -86,83 +84,6 @@ For users who have Python installed (Linux, macOS, Windows) and prefer using `pi
 
 ---
 
-## Credentials (Copernicus DEM)
-
-RangePlotter automatically downloads terrain data from the **Copernicus Data Space Ecosystem (CDSE)**. You need a free account to access this data.
-
-### Step 1: Register
-Create a free account at [dataspace.copernicus.eu](https://dataspace.copernicus.eu/).
-
-### Step 2: Configure Credentials
-You have two options for providing credentials. We recommend **Option B** (Refresh Token) for security, as it avoids storing your password in plain text.
-
-#### Option A: Username & Password (Simplest)
-Create a `.env` file in the folder where you run the tool:
-```bash
-COPERNICUS_USERNAME=your_email@example.com
-COPERNICUS_PASSWORD=your_password
-```
-
-#### Option B: Refresh Token (Secure)
-1.  Create a temporary `.env` file with your username and password as above.
-2.  Run the helper command to generate a long-lived refresh token:
-    ```bash
-    ./rangeplotter extract-refresh-token
-    ```
-3.  Copy the output line starting with `COPERNICUS_REFRESH_TOKEN=...`.
-4.  Update your `.env` file to remove your password and paste the token:
-    ```bash
-    COPERNICUS_USERNAME=your_email@example.com
-    COPERNICUS_REFRESH_TOKEN=eyJhbGciOiJIUz... (long string)
-    ```
-
----
-
-## ⚡ Workflow Guide
-
-### 1. Prepare Input
-Place your radar sites in a KML file (e.g., `working_files/sensor_locations/my_radars.kml`).
-*   **Format**: Standard Google Earth KML.
-*   **Content**: `Placemark` points. The name of the placemark will be used as the sensor name.
-
-### 2. Calculate Geometric Horizon (Optional)
-Generate theoretical range rings (smooth earth) to verify maximum line of sight over open water.
-```bash
-./rangeplotter horizon
-```
-
-### 3. Calculate Terrain Viewshed (Primary)
-Compute the actual visibility. This downloads DEM tiles, reprojects them, and performs terrain-aware line-of-sight analysis to targets at any given altitude.
-```bash
-./rangeplotter viewshed
-```
-*   **Output**: `working_files/viewshed/viewshed-[SiteName]-tgt_alt_[Alt]m.kml`
-
-### 4. Apply Detection Ranges
-Clip the raw viewsheds to specific instrumented ranges (e.g., 100km, 200km) and merge overlapping coverage from multiple sensor locations.
-```bash
-./rangeplotter detection-range --range 150,300
-```
-*   **Output**: `working_files/detection_range/`
-
----
-
-## Configuration
-
-Most behaviours and settings are controlled by `config/config.yaml`. Key settings include:
-
-| Setting | Description | Default |
-| :--- | :--- | :--- |
-| `input_dir` | Directory to scan for KML inputs. | `working_files/sensor_locations` |
-| `altitudes_msl_m` | List of target altitudes (meters) for viewshed analysis. | `[2, 10, ...]` |
-| `target_altitude_reference` | Altitude mode: `msl` (absolute) or `agl` (relative to terrain). | `msl` |
-| `sensor_height_m_agl` | Height of the sensor above ground (meters). | `5.0` |
-| `atmospheric_k_factor` | Refraction coefficient (1.333 = 4/3 Earth radius). | `1.333` |
-| `detection_ranges` | List of max ranges (km) for `detection-range` clipping. | `[50, 100, 200]` |
-| `simplify_tolerance_m` | Polygon simplification (higher = smaller files). | `5.0` |
-
----
-
 ## Tech Stack & Methodology
 
 RangePlotter is built on a robust open-source geospatial stack:
@@ -200,7 +121,3 @@ This project uses `fastkml` and `simplekml`, which are licensed under the **LGPL
 - If you modify these libraries and redistribute this application, you must comply with the LGPL terms (e.g., allowing users to replace the modified library).
 - As this project is open source, the source code is available for users to rebuild the application with their own versions of these dependencies.
 
----
-
-## Troubleshooting
-- Slow performance: reduce altitudes, adjust multiscale in config or adjust the CPU and RAM usage guards in config.
