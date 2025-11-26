@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **KML Export Altitude Mode**: Added `kml_export_altitude_mode` to `config.yaml`. Defaults to `"clamped"` (clampToGround) for better visualization in Google Earth, with an option for `"absolute"` to render at the calculated target altitude.
 
 ### Changed
+- Renamed default input directory from `working_files/input` to `working_files/sensor_locations` to better reflect its purpose.
+- Updated `install_or_upgrade.sh` to automatically migrate the legacy `input` directory to `sensor_locations` and update `config.yaml` during upgrades.
 - Updated `README.md` with comprehensive installation instructions for the new distribution methods.
 - Updated `docs/RELEASE_PROCESS.md` to reflect the new build artifacts and RC workflow.
 
