@@ -115,83 +115,38 @@
     *   **Refraction**: The standard 4/3 Earth radius model (or configured k-factor) will apply to the path `Sensor -> (Terrain + AGL)` exactly as it does for `Sensor -> Terrain`.
 
 ## 7. Packaging & Distribution
-**Goal**: Package the utility for easy distribution to Linux users without requiring them to manage Python environments or complex GDAL dependencies.
+**Goal**: Provide robust, flexible distribution options for both end-users (Linux binary) and developers (Python package), while ensuring a smooth upgrade path.
 
-**Strategy**: **Standalone Binary via PyInstaller**.
-This approach bundles the Python interpreter, application code, and all dependencies (including GDAL/Rasterio) into a single executable file. Users can download it directly from GitHub Releases, make it executable, and run it.
+### Feature: Hybrid Distribution Model
+**Goal**: Offer both a "Frozen Binary" for ease of use and a "Python Wheel" for flexibility and code inspection.
 
-**Status**: **Implemented**.
-- PyInstaller spec file created and verified.
-- GitHub Actions workflow configured to build and release binaries on tags.
-- **Updated**: Release process now packages the binary in a ZIP archive with editable config and data folders.
-
-**Implementation Steps**:
-1.  **Dependency Analysis** (Done):
-    *   Verify `pyinstaller` compatibility with `rasterio` and `typer`.
-    *   Identify necessary hidden imports and binary data (GDAL data files).
-2.  **Build Configuration** (Done):
-    *   Create a `rangeplotter.spec` file to define the build process.
-    *   Ensure `gdal-data` and `proj-data` are correctly bundled and environment variables are set at runtime.
-3.  **GitHub Actions Workflow** (Done):
-    *   Create a workflow `.github/workflows/build.yml` to automate the build on new tags.
-    *   Step 1: Checkout code.
-    *   Step 2: Install system dependencies (GDAL, etc.) on the runner.
-    *   Step 3: Build binary with PyInstaller.
-    *   Step 4: Upload binary as a release asset.
-4.  **Snap Package (Secondary)**:
-    *   Once the binary build is stable, consider wrapping it in a `snap` for the Canonical Store.
-    *   Create `snap/snapcraft.yaml`.
-
-### Feature: Portable Archive Release
-**Goal**: Repackage the application so that users can easily access and modify configuration files and input data without needing to rebuild the binary. The current single-file binary hides `config.yaml` and `working_files`, making it difficult for end-users to configure the tool.
-
-**Status**: **Implemented**.
+**Status**: **Planned for v0.1.5**.
 
 **Implementation Plan**:
+1.  **Python Wheel (.whl)**:
+    *   **Build**: Use `poetry build` or `python -m build` to generate a standard wheel file (e.g., `rangeplotter-0.1.5-py3-none-any.whl`).
+    *   **CI/CD**: Update GitHub Actions to build and upload this artifact alongside the binary zip.
+    *   **Benefit**: Allows developers to `pip install` the tool into their own environments, solving dependency issues on non-Linux platforms and enabling code inspection.
 
-1.  **Configuration Loading Logic (`src/rangeplotter/config/settings.py`)** (Done):
-    *   Modify the `load_settings` (or equivalent) function to search for `config.yaml` in the following priority order:
-        1.  **Current Working Directory**: `./config/config.yaml` (Priority 1 - User overrides).
-        2.  **Executable Directory**: `{exe_dir}/config/config.yaml` (Priority 2 - Portable install).
-        3.  **Internal Fallback**: The bundled default config (Priority 3 - Safety net).
-    *   Ensure that default paths for `working_files`, `cache_dir`, etc., in the config are resolved relative to the *location of the config file* or the *executable*, rather than hardcoded absolute paths or internal temp directories.
+2.  **Release Candidate Workflow**:
+    *   **Methodology**: Adopt a pre-release testing cycle using tags like `v0.1.5-rc1`.
+    *   **CI Logic**: Update build workflows to detect `-rc` tags and mark releases as "Pre-release" on GitHub.
+    *   **Benefit**: Enables testing of the *packaged* application before general availability.
 
-2.  **Release Artifact Structure** (Done):
-    *   Define the standard release format as a ZIP archive containing:
-        ```text
-        rangeplotter_vX.Y.Z/
-        ├── rangeplotter          (The executable binary)
-        ├── README.md             (Documentation)
-        ├── LICENSE               (License file)
-        ├── config/
-        │   └── config.yaml       (Default user-editable config)
-        └── working_files/
-            ├── input/            (Empty or with sample data)
-            ├── output/           (Placeholder)
-            └── ...
-        ```
+### Feature: Graceful Upgrade Capability
+**Goal**: Allow users to upgrade the application binary without overwriting their configuration or data.
 
-3.  **Build Process Update** (Done):
-    *   Update `docs/RELEASE_PROCESS.md` to include the steps for creating this archive.
-    *   (Optional) Create a helper script `scripts/build_release.sh` to:
-        1.  Run PyInstaller.
-        2.  Create the directory structure.
-        3.  Copy the binary, config, and readme.
-        4.  Zip the result.
+**Status**: **Planned for v0.1.5**.
 
-4.  **Verification** (Done):
-    *   Test running the binary from a clean directory with an external `config/config.yaml`.
-    *   Verify that changes to the external config (e.g., changing `output_dir`) are respected by the binary.
-
-## 5. Documentation & Housekeeping
-    *   **Update README.md** (Done):
-        *   Revise the "Installation" section to reflect the new Zip archive format.
-        *   Explain the directory structure (binary, config, working_files).
-        *   Clarify that users should edit `config/config.yaml` to change settings.
-    *   **Update .gitignore** (Done): Ensure the new release artifacts (zip files, release folders) are ignored.
-    *   **Clean up** (Done): Remove any obsolete build artifacts or temporary files.
-
-## 7. Future Work
-- Union polygons across multiple radars.
-- Advanced propagation modeling.
-- Web UI.
+**Implementation Plan**:
+1.  **Upgrade Script (Solution B)**:
+    *   Include an `install_or_upgrade.sh` script in the release zip.
+    *   Document the process for Linux/Windows/Mac in the readme, including recommendation to backup files (copy to xxx.backup) before upgrading.
+    *   **Logic**:
+        *   Prompt user for install location.
+        *   Copy the new `rangeplotter` binary.
+        *   Check for existing `config/config.yaml`. If found, do *not* overwrite.
+        *   (Optional) Check for new config keys and append them to the existing file if missing.
+        *   Ensure user's `.env` remains intact.
+        *   
+    *   **Config Strategy**: No changes to `config.yaml` structure or location logic. The application will continue to look for config in the executable directory or CWD.

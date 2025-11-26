@@ -35,21 +35,33 @@ No Python environment required.
     unzip rangeplotter_vX.Y.Z_linux.zip
     cd rangeplotter_vX.Y.Z_linux
     ```
-3.  **Make executable**:
+3.  **Install / Upgrade**:
+    Run the included script to set up the executable and preserve your existing configuration if upgrading:
     ```bash
-    chmod +x rangeplotter
+    chmod +x install_or_upgrade.sh
+    ./install_or_upgrade.sh
     ```
+    *This script will make `rangeplotter` executable and ensure your `config/` and `working_files/` are safe.*
+
 4.  **Run**:
     ```bash
     ./rangeplotter --help
     ```
 
-**Directory Structure**:
-*   `rangeplotter`: The executable.
-*   `config/config.yaml`: **Edit this file** to change settings (output directories, API credentials, etc.).
-*   `working_files/`: Place your input KML files in `working_files/input/`.
+### Option 2: Python Wheel (Cross-Platform / Advanced)
+For users who have Python installed (Linux, macOS, Windows) and prefer using `pip`.
 
-### Option 2: Python Source (For Developers)
+1.  **Download** the `.whl` file from the [GitHub Releases page](https://github.com/renwell-studio/rangeplotter/releases).
+2.  **Install**:
+    ```bash
+    pip install rangeplotter-0.1.5-py3-none-any.whl
+    ```
+3.  **Run**:
+    ```bash
+    rangeplotter --help
+    ```
+
+### Option 3: Python Source (For Developers)
 1.  Clone the repository:
     ```bash
     git clone https://github.com/renwell-studio/rangeplotter.git
