@@ -33,7 +33,9 @@ We follow a simple feature-branch workflow to maintain stability.
     ```bash
     python3 src/rangeplotter/cli/main.py [command] [flags]
     ```
-3.  **Commit**: Stage and commit your changes with clear messages.
+3.  **Update Documentation**: Edit `docs/guide/`, `README.md`, `RELEASE_PROCESS.md`, etc. as required.
+4.  **Update Changlog**: Record your changes in `CHANGELOG.md`.
+5.  **Commit**: Stage and commit your changes with clear messages.
     ```bash
     git add .
     git commit -m "Description of changes"
