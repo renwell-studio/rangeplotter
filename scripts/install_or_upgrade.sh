@@ -67,10 +67,10 @@ cp "$SOURCE_DIR/README.md" "$INSTALL_DIR/" 2>/dev/null || true
 cp "$SOURCE_DIR/LICENSE" "$INSTALL_DIR/" 2>/dev/null || true
 
 # 5. Copy Sample Data (if input dir is empty)
-if [ -z "$(ls -A "$INSTALL_DIR/working_files/input" 2>/dev/null)" ]; then
+if [ -z "$(ls -A "$INSTALL_DIR/working_files/sensor_locations" 2>/dev/null)" ]; then
     echo "Copying sample data..."
-    mkdir -p "$INSTALL_DIR/working_files/input"
-    cp -r "$SOURCE_DIR/working_files/input/"* "$INSTALL_DIR/working_files/input/" 2>/dev/null || true
+    mkdir -p "$INSTALL_DIR/working_files/sensor_locations"
+    cp -r "$SOURCE_DIR/working_files/sensor_locations/"* "$INSTALL_DIR/working_files/sensor_locations/" 2>/dev/null || true
 fi
 
 echo ""

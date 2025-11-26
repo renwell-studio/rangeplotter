@@ -117,7 +117,7 @@ COPERNICUS_PASSWORD=your_password
 ## ⚡ Workflow Guide
 
 ### 1. Prepare Input
-Place your radar sites in a KML file (e.g., `working_files/input/my_radars.kml`).
+Place your radar sites in a KML file (e.g., `working_files/sensor_locations/my_radars.kml`).
 *   **Format**: Standard Google Earth KML.
 *   **Content**: `Placemark` points. The name of the placemark will be used as the sensor name.
 
@@ -149,7 +149,7 @@ Most behaviours and settings are controlled by `config/config.yaml`. Key setting
 
 | Setting | Description | Default |
 | :--- | :--- | :--- |
-| `input_dir` | Directory to scan for KML inputs. | `working_files/input` |
+| `input_dir` | Directory to scan for KML inputs. | `working_files/sensor_locations` |
 | `altitudes_msl_m` | List of target altitudes (meters) for viewshed analysis. | `[2, 10, ...]` |
 | `target_altitude_reference` | Altitude mode: `msl` (absolute) or `agl` (relative to terrain). | `msl` |
 | `sensor_height_m_agl` | Height of the sensor above ground (meters). | `5.0` |

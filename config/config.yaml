@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 
 # Default input directory for KML files containing sensor locations.
-input_dir: "working_files/input"
+input_dir: "working_files/sensor_locations"
 
 # Default output directory for viewshed results.
 output_viewshed_dir: "working_files/viewshed"

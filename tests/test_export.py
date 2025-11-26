@@ -72,7 +72,8 @@ def test_export_viewshed_kml_multipolygon(tmp_path):
         style_config={},
         sensors=[],
         document_name="Multi",
-        altitude_mode="agl"
+        altitude_mode="agl",
+        kml_export_mode="absolute"
     )
     
     assert out_file.exists()

@@ -41,7 +41,7 @@ jobs:
         
         # Create directories
         mkdir -p "$RELEASE_DIR/config"
-        mkdir -p "$RELEASE_DIR/working_files/input"
+        mkdir -p "$RELEASE_DIR/working_files/sensor_locations"
         mkdir -p "$RELEASE_DIR/data_cache"
         
         # Copy Binary
@@ -57,7 +57,7 @@ jobs:
         cp scripts/install_or_upgrade.sh "$RELEASE_DIR/"
         
         # Copy Sample Data
-        cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
+        cp "working_files/sensor_locations/radars_sample.kml" "$RELEASE_DIR/working_files/sensor_locations/"
         
         # Zip
         zip -r "${RELEASE_DIR}.zip" "$RELEASE_DIR"

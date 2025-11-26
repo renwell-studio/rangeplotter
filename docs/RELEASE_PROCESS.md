@@ -146,7 +146,7 @@ rm -rf "$RELEASE_DIR"
 
 # Create directories
 mkdir -p "$RELEASE_DIR/config"
-mkdir -p "$RELEASE_DIR/working_files/input"
+mkdir -p "$RELEASE_DIR/working_files/sensor_locations"
 mkdir -p "$RELEASE_DIR/data_cache"
 
 # Copy Files
@@ -155,7 +155,7 @@ cp config/config.yaml "$RELEASE_DIR/config/"
 cp README.md LICENSE "$RELEASE_DIR/"
 cp scripts/install_or_upgrade.sh "$RELEASE_DIR/"
 cp example.env "$RELEASE_DIR/"
-cp "working_files/input/radars_sample.kml" "$RELEASE_DIR/working_files/input/"
+cp "working_files/sensor_locations/radars_sample.kml" "$RELEASE_DIR/working_files/sensor_locations/"
 
 # Zip
 cd release

@@ -9,7 +9,7 @@ runner = CliRunner()
 
 @pytest.fixture
 def mock_dirs(tmp_path):
-    input_dir = tmp_path / "working_files/input"
+    input_dir = tmp_path / "working_files/sensor_locations"
     input_dir.mkdir(parents=True)
     viewshed_dir = tmp_path / "working_files/viewshed"
     viewshed_dir.mkdir(parents=True)

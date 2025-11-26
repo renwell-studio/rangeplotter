@@ -57,7 +57,7 @@ try:
     default_detection_dir = _settings.resolve_path(_settings.output_detection_dir)
 except Exception:
     # Fallback defaults if config is missing/broken (e.g. first run or bad path)
-    default_input_dir = Path("working_files/input")
+    default_input_dir = Path("working_files/sensor_locations")
     default_viewshed_dir = Path("working_files/viewshed")
     default_horizon_dir = Path("working_files/horizon")
     default_detection_dir = Path("working_files/detection_range")
@@ -352,7 +352,7 @@ def horizon(
 @app.command()
 def viewshed(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
-    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/input/."),
+    input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/sensor_locations/."),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),

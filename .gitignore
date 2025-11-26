@@ -20,9 +20,9 @@ htmlcov/
 
 # Ignore working files, but keep the sample input
 working_files/*
-!working_files/input/
-working_files/input/*
-!working_files/input/radars_sample.kml
+!working_files/sensor_locations/
+working_files/sensor_locations/*
+!working_files/sensor_locations/radars_sample.kml
 
 # Private docs
 docs/TODO.md

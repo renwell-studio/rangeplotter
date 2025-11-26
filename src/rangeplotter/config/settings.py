@@ -54,7 +54,7 @@ class CopernicusAPIConfig(BaseModel):
 import sys
 
 class Settings(BaseModel):
-    input_dir: str = "working_files/input"
+    input_dir: str = "working_files/sensor_locations"
     output_viewshed_dir: str = "working_files/viewshed"
     output_horizon_dir: str = "working_files/horizon"
     output_detection_dir: str = "working_files/detection_range"
