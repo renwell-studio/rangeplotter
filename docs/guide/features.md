@@ -30,7 +30,7 @@ The `network run` command streamlines the entire process for multi-site networks
 2.  **Horizon**: Computes theoretical max ranges.
 3.  **Detection Range**: Clips viewsheds to instrument limits and creates composite coverage maps.
 
-This command also supports an **Interactive Wizard** mode to guide you through the setup if you don't provide command-line arguments.
+This command also supports an **Interactive Wizard** mode to guide you through the setup if you don't provide command-line arguments. The wizard allows you to review and revise your configuration settings (altitudes, ranges, etc.) before starting the analysis.
 
 ## Target Altitude Modes (AGL vs MSL)
 *   **AGL (Above Ground Level)**: The target maintains a constant height above the terrain surface. This is ideal for:

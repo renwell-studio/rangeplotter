@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Smart Resume**: The system now tracks the state of each simulation (hashing inputs and parameters). Re-running a command will automatically skip viewsheds that have already been calculated with the same parameters, saving significant time.
 - **CSV Input Support**: Added support for defining radar sites via CSV files (`.csv`) in addition to KML.
 - **Filtering**: Added `--filter` option to `viewshed` and `network` commands to process only specific sites matching a regex pattern.
-- **Interactive Wizard**: The `network run` command features an interactive wizard to guide users through configuration if arguments are omitted.
+- **Interactive Wizard**: The `network run` command features an interactive wizard to guide users through configuration if arguments are omitted. It now includes a review loop, allowing users to revise settings before starting the analysis.
 - **Package Entry Point**: The package can now be run directly via `python -m rangeplotter`.
 - **Examples**: Added `examples/` directory with sample CSV and KML files.
+
+### Changed
+- **Default Output Directory**: The `network run` command now defaults to `working_files/network/{input_name}_{timestamp}` if no output directory is specified, keeping the project workspace organized.
 
 ## [0.1.5-rc1] - 2025-11-26
 ### Added
