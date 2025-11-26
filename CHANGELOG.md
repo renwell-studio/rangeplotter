@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5-rc1] - 2025-11-26
+### Added
+- **Hybrid Distribution Model**: Now releasing both a standalone binary (Linux) and a standard Python Wheel (`.whl`) for cross-platform/developer use.
+- **Graceful Upgrade Script**: Added `install_or_upgrade.sh` to the binary release. This script automates installation and upgrades while preserving user configuration (`config.yaml`) and data.
+- **Release Candidate Workflow**: CI/CD pipeline now supports `-rc` tags (e.g., `v0.1.5-rc1`) for pre-release testing.
+
+### Changed
+- Updated `README.md` with comprehensive installation instructions for the new distribution methods.
+- Updated `docs/RELEASE_PROCESS.md` to reflect the new build artifacts and RC workflow.
+
 ## [0.1.4] - 2025-11-24
 ### Added
 - Comprehensive automated test suite using `pytest`.
