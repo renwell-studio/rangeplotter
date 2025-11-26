@@ -89,6 +89,11 @@ class DemClient:
 
     def query_tiles(self, bbox: Tuple[float, float, float, float], limit: int = 20) -> List[DemTile]:
         """Query COP-DEM products intersecting bbox. If auth missing, return synthetic tile."""
+        # Check local index coverage first
+        local_tiles = self._check_local_coverage(bbox)
+        if local_tiles:
+            return local_tiles
+
         if not self.auth:
             minx, miny, maxx, maxy = bbox
             tile_id = f"synthetic_{minx:.3f}_{miny:.3f}_{maxx:.3f}_{maxy:.3f}"
@@ -101,10 +106,6 @@ class DemClient:
             tile_id = f"synthetic_{minx:.3f}_{miny:.3f}_{maxx:.3f}_{maxy:.3f}"
             path = self.cache_dir / f"{tile_id}.tif"
             return [DemTile(id=tile_id, bbox=bbox, local_path=path, downloaded=path.exists())]
-        # Check local index coverage first
-        local_tiles = self._check_local_coverage(bbox)
-        if local_tiles:
-            return local_tiles
 
         poly = self._bbox_polygon_wkt(bbox)
         # Build OData filter

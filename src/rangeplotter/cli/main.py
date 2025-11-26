@@ -421,14 +421,6 @@ def viewshed(
         verbose=verbose
     )
 
-    # Friendly auth check
-    if not auth.ensure_access_token():
-        print("\n[bold red]Authentication Failed[/bold red]")
-        print("Could not obtain an access token from Copernicus Data Space Ecosystem.")
-        print("Please check your .env file or run 'rangeplotter extract-refresh-token'.")
-        print("See README for details.\n")
-        raise typer.Exit(code=1)
-
     dem_cache = Path(settings.cache_dir) / "dem"
     dem_client = DemClient(
         base_url=settings.copernicus_api.base_url,
