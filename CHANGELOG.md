@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5-rc2] - 2025-11-26
+### Fixed
+- **Network Run**: Fixed issue where `network run` would fail to find input files if they were not in the current directory (now checks `working_files/sensor_locations`).
+- **Network Run**: Fixed issue where `network run` would fail when running as a frozen binary (PyInstaller) due to incorrect subprocess call.
+- **Network Run**: Added support for `--sensor-heights` / `-sh` CLI argument in `network run` command.
+- **Help Text**: Removed "scaffold" from the main help text.
+- **Documentation**: Added comprehensive guide for installing and running via Pip/Wheel (`docs/guide/pip_install.md`).
+- **Metadata**: Updated package metadata with author details.
+
 ## [0.1.5-rc1] - 2025-11-26
 ### Added
 - **Sensor Height Array**: Added support for calculating viewsheds for multiple sensor heights in a single run. The `sensor_height_m_agl` setting in `config.yaml` now accepts a list of heights (e.g., `[10.0, 20.0]`).
