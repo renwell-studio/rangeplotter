@@ -52,6 +52,27 @@ else
     cp "$SOURCE_DIR/config/config.yaml" "$INSTALL_DIR/config/config.yaml"
 fi
 
+# 2.5. Migration: input -> sensor_locations
+# Move directory if needed
+if [ -d "$INSTALL_DIR/working_files/input" ] && [ ! -d "$INSTALL_DIR/working_files/sensor_locations" ]; then
+    echo "Migrating legacy 'input' directory to 'sensor_locations'..."
+    mv "$INSTALL_DIR/working_files/input" "$INSTALL_DIR/working_files/sensor_locations"
+fi
+
+# Update config if it points to the old location (regardless of whether we moved the dir)
+CONFIG_FILE="$INSTALL_DIR/config/config.yaml"
+if [ -f "$CONFIG_FILE" ]; then
+    if grep -q "working_files/input" "$CONFIG_FILE"; then
+        echo "Updating config.yaml to reflect directory rename..."
+        cp "$CONFIG_FILE" "$CONFIG_FILE.bak_migration"
+        
+        # Replace variations of the setting
+        sed 's|input_dir: "working_files/input"|input_dir: "working_files/sensor_locations"|g' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+        sed "s|input_dir: 'working_files/input'|input_dir: 'working_files/sensor_locations'|g" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+        sed 's|input_dir: working_files/input|input_dir: "working_files/sensor_locations"|g' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+    fi
+fi
+
 # 3. Handle Example Env
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     if [ -f "$SOURCE_DIR/example.env" ]; then
