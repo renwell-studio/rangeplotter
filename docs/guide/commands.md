@@ -38,6 +38,8 @@ rangeplotter viewshed [OPTIONS]
 *   `--output / -o`: Output directory.
 *   `--altitudes / -a`: Comma-separated list of target altitudes to calculate (overrides config).
     *   *Example*: `-a 50,100,500`
+*   `--sensor-heights / -sh`: Comma-separated list of sensor heights (AGL) to calculate (overrides config).
+    *   *Example*: `-sh 10,20,30`
 *   `--reference / --ref`: Set target altitude reference (`agl` or `msl`).
 *   `--filter`: Regex pattern to filter sensors.
 *   `--force`: Force recalculation.

@@ -44,6 +44,25 @@ class StateManager:
         
         return hashlib.md5(data.encode("utf-8")).hexdigest()
 
+    def update_state(self, site_name: str, target_alt: float, current_hash: str, output_filename: str = None):
+        """Update the state with the new hash for this task."""
+        # We include the filename in the key to support multiple files per site/altitude (e.g. different sensor heights)
+        # But wait, should_run uses site_name and target_alt as key.
+        # If we have multiple sensor heights, we have multiple tasks for the same site/alt.
+        # We need a unique key for each task.
+        # The caller (main.py) passes filename to should_run, but should_run ignores it for key generation.
+        # We should change the key strategy to be based on the filename or include the hash in the key?
+        # Actually, if we use the filename as the key, it's unique.
+        
+        if output_filename:
+            key = output_filename
+        else:
+            # Fallback for backward compatibility or if filename not provided (though it should be)
+            key = f"{site_name}_{target_alt}"
+            
+        self.state[key] = current_hash
+        self._save_state()
+
     def should_run(self, site_name: str, target_alt: float, current_hash: str, output_filename: str) -> bool:
         """
         Determine if the viewshed needs to be run.
@@ -58,15 +77,13 @@ class StateManager:
             return True
             
         # Check if hash matches
-        # We use a composite key of site name and target altitude
-        # Note: This assumes site names are unique within a run, which is generally true or handled by the caller
-        key = f"{site_name}_{target_alt}"
+        # Prefer filename as key if available in state (new format), fallback to old format
+        key = output_filename
         stored_hash = self.state.get(key)
         
+        if stored_hash is None:
+             # Try legacy key
+             legacy_key = f"{site_name}_{target_alt}"
+             stored_hash = self.state.get(legacy_key)
+        
         return stored_hash != current_hash
-
-    def update_state(self, site_name: str, target_alt: float, current_hash: str):
-        """Update the state with the new hash for this task."""
-        key = f"{site_name}_{target_alt}"
-        self.state[key] = current_hash
-        self._save_state()

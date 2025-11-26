@@ -62,7 +62,7 @@ class Settings(BaseModel):
     altitudes_msl_m: List[float]
     target_altitude_reference: str = Field("msl", pattern="^(msl|agl)$")
     kml_export_altitude_mode: str = Field("clamped", pattern="^(clamped|absolute)$")
-    sensor_height_m_agl: float = 5.0
+    sensor_height_m_agl: float | List[float] = 5.0
     atmospheric_k_factor: float = 1.333
     working_crs_strategy: str = Field("auto_aeqd", pattern=r"^(auto_aeqd|manual:EPSG:\d+)$")
     max_threads: int = 8
@@ -82,6 +82,21 @@ class Settings(BaseModel):
     
     # Internal field to track where config was loaded from
     _config_base_path: Optional[Path] = None
+
+    @field_validator("sensor_height_m_agl")
+    @classmethod
+    def validate_sensor_height(cls, v):
+        if isinstance(v, (float, int)):
+            return float(v)
+        if isinstance(v, list):
+            return sorted(list(set([float(x) for x in v])))
+        raise ValueError("sensor_height_m_agl must be a float or list of floats")
+
+    @property
+    def effective_sensor_heights(self) -> List[float]:
+        if isinstance(self.sensor_height_m_agl, list):
+            return self.sensor_height_m_agl
+        return [self.sensor_height_m_agl]
 
     @field_validator("altitudes_msl_m")
     @classmethod

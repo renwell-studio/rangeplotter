@@ -367,6 +367,7 @@ def viewshed(
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/sensor_locations/."),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
     altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
+    sensor_heights_cli: Optional[List[str]] = typer.Option(None, "--sensor-heights", "-sh", help="Sensor heights AGL in meters (comma separated). Overrides config."),
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
     check_download: bool = typer.Option(False, "--check-download", "--check", help="Check download requirements without downloading full dataset."),
@@ -406,6 +407,20 @@ def viewshed(
             settings.altitudes_msl_m = parsed_alts
             typer.echo(f"Using target altitudes from CLI: {settings.altitudes_msl_m}")
             
+    # Override sensor heights if provided via CLI
+    if sensor_heights_cli:
+        parsed_heights = []
+        for h_str in sensor_heights_cli:
+            parts = h_str.split(',')
+            for p in parts:
+                try:
+                    parsed_heights.append(float(p.strip()))
+                except ValueError:
+                    typer.echo(f"[yellow]Warning: Invalid sensor height value '{p}'. Skipping.[/yellow]")
+        if parsed_heights:
+            settings.sensor_height_m_agl = sorted(list(set(parsed_heights)))
+            typer.echo(f"Using sensor heights from CLI: {settings.sensor_height_m_agl}")
+
     # Override reference if provided via CLI
     if reference_cli:
         if reference_cli.lower() in ["msl", "agl"]:
@@ -604,6 +619,15 @@ def viewshed(
     # Initialize state manager
     state_manager = StateManager(out_dir_path)
 
+    # Determine sensor heights to process
+    # If sensor_height_m_agl is a list, we iterate over it.
+    # However, if a sensor has a specific override in KML (relativeToGround), that specific value is used instead of the list.
+    # This creates a complexity: do we run multiple heights for a sensor that has a fixed height in KML?
+    # Decision: If a sensor has a fixed height (from KML), we run it once with that height.
+    # If it uses the default (from config/CLI), we run it for each height in the list.
+    
+    default_sensor_heights = settings.effective_sensor_heights
+
     with progress.Progress(
         progress.SpinnerColumn(),
         progress.TextColumn("[progress.description]{task.description}"),
@@ -612,101 +636,156 @@ def viewshed(
         progress.TimeRemainingColumn(),
         console=console
     ) as prog:
-        # Estimate total steps (radars * altitudes)
-        total_steps = len(radars) * len(altitudes) * 100
+        # Estimate total steps (radars * heights * altitudes)
+        # This is an estimate because some radars might only have 1 height
+        total_steps = 0
+        tasks_to_run = []
+        
+        for sensor in radars:
+            # Determine applicable heights for this sensor
+            if sensor.altitude_mode == 'relativeToGround' and sensor.input_altitude is not None and sensor.input_altitude > 0:
+                # Sensor has specific height defined in KML
+                heights = [0.0] # The sensor object already has the height baked in or handled
+                # Actually, looking at radar_site.py:
+                # if relativeToGround, radar_height_m_msl = ground + input_altitude + sensor_height_m_agl
+                # In kml.py, if relativeToGround, we set sensor_height_m_agl = 0.0
+                # So we should just use the sensor's current configuration as a single pass.
+                # But wait, if the user wants to test multiple heights, they probably want to override the KML?
+                # The requirement says: "only applies if sensor height agl is not specified in input kml"
+                heights = [sensor.sensor_height_m_agl]
+            else:
+                # Use the list from settings
+                heights = default_sensor_heights
+            
+            for h in heights:
+                for alt in altitudes:
+                    tasks_to_run.append((sensor, h, alt))
+        
+        total_steps = len(tasks_to_run) * 100
         overall_task = prog.add_task("Computing viewsheds...", total=total_steps)
         
         current_step = 0
         
-        for sensor in radars:
-            for i, alt in enumerate(altitudes, 1):
-                # Prepare filename to check state
-                safe_name = sensor.name.replace(" ", "_").replace("/", "-")
-                alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
-                altitude_mode = settings.target_altitude_reference
-                ref_str = altitude_mode.upper()
-                prefix = f"{i:02d}_"
-                filename = f"{prefix}rangeplotter-{safe_name}-tgt_alt_{alt_str}m_{ref_str}.kml"
-                
-                # Compute hash
-                current_hash = state_manager.compute_hash(sensor, alt, settings.atmospheric_k_factor)
-                
-                if not force and not state_manager.should_run(sensor.name, alt, current_hash, filename):
-                    if verbose >= 1:
-                        prog.console.print(f"[dim]Skipping {sensor.name} @ {alt}m (already exists)[/dim]")
-                    prog.update(overall_task, completed=current_step + 100)
-                    current_step += 100
-                    continue
+        for sensor, sensor_h, alt in tasks_to_run:
+            # Temporarily override sensor height for calculation
+            # We need to be careful not to permanently modify the sensor object if we are iterating
+            original_h = sensor.sensor_height_m_agl
+            sensor.sensor_height_m_agl = sensor_h
+            
+            # Prepare filename to check state
+            safe_name = sensor.name.replace(" ", "_").replace("/", "-")
+            alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+            
+            # Add sensor height to filename if we are running multiple heights
+            # or if it differs from the default single height?
+            # To keep it simple and consistent, maybe we should always include it if it's not the standard default?
+            # Or just always include it?
+            # Existing naming convention: 01_rangeplotter-Site-tgt_alt_100m_AGL.kml
+            # If we have multiple sensor heights, we need to distinguish them.
+            # Let's add _sh_Xm if there are multiple heights configured globally, or if it's a non-standard run.
+            
+            sh_suffix = ""
+            if len(default_sensor_heights) > 1:
+                sh_str = f"{int(sensor_h)}" if sensor_h.is_integer() else f"{sensor_h}"
+                sh_suffix = f"_sh_{sh_str}m"
+            
+            altitude_mode = settings.target_altitude_reference
+            ref_str = altitude_mode.upper()
+            
+            # Find index for altitude sorting prefix
+            try:
+                alt_idx = altitudes.index(alt) + 1
+            except ValueError:
+                alt_idx = 0
+            prefix = f"{alt_idx:02d}_"
+            
+            filename = f"{prefix}rangeplotter-{safe_name}{sh_suffix}-tgt_alt_{alt_str}m_{ref_str}.kml"
+            
+            # Compute hash - include sensor height!
+            current_hash = state_manager.compute_hash(sensor, alt, settings.atmospheric_k_factor)
+            # Note: compute_hash uses sensor.radar_height_m_msl, which uses sensor.sensor_height_m_agl
+            # So modifying sensor.sensor_height_m_agl above correctly affects the hash.
+            
+            if not force and not state_manager.should_run(sensor.name, alt, current_hash, filename):
+                if verbose >= 1:
+                    prog.console.print(f"[dim]Skipping {sensor.name} (SH: {sensor_h}m) @ {alt}m (already exists)[/dim]")
+                prog.update(overall_task, completed=current_step + 100)
+                current_step += 100
+                # Restore original height
+                sensor.sensor_height_m_agl = original_h
+                continue
 
-                prog.update(overall_task, description=f"Computing viewshed for {sensor.name} @ {alt}m")
-                calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
+            prog.update(overall_task, description=f"Computing viewshed for {sensor.name} (SH: {sensor_h}m) @ {alt}m")
+            calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
+            
+            def _update_progress(step: str, pct: float):
+                pct = max(0.0, min(100.0, pct))
+                prog.update(calc_task, description=f"  {step}...", completed=pct)
                 
-                def _update_progress(step: str, pct: float):
-                    pct = max(0.0, min(100.0, pct))
-                    prog.update(calc_task, description=f"  {step}...", completed=pct)
-                    
-                    task_progress = 0.0
-                    if step == "Initializing": task_progress = 5.0
-                    elif step == "Computing LOS": task_progress = 10.0 + (pct * 0.6)
-                    elif step == "Generating Mask": task_progress = 70.0 + (pct * 0.2)
-                    elif step == "Vectorizing": task_progress = 90.0
-                    elif step == "Transforming to WGS84": task_progress = 95.0
-                    
-                    prog.update(overall_task, completed=current_step + task_progress)
+                task_progress = 0.0
+                if step == "Initializing": task_progress = 5.0
+                elif step == "Computing LOS": task_progress = 10.0 + (pct * 0.6)
+                elif step == "Generating Mask": task_progress = 70.0 + (pct * 0.2)
+                elif step == "Vectorizing": task_progress = 90.0
+                elif step == "Transforming to WGS84": task_progress = 95.0
+                
+                prog.update(overall_task, completed=current_step + task_progress)
 
-                try:
-                    if verbose >= 2:
-                        log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
+            try:
+                if verbose >= 2:
+                    log_memory_usage(log, f"Before {sensor.name} @ {alt}m")
+                
+                cfg_dict = settings.model_dump()
+                poly = compute_viewshed(
+                    sensor, 
+                    alt, 
+                    dem_client, 
+                    cfg_dict, 
+                    progress_callback=_update_progress, 
+                    rich_progress=prog,
+                    altitude_mode=altitude_mode
+                )
+                
+                out_path = out_dir_path / filename
+                
+                # Merge sensor style with default style
+                final_style = settings.style.model_dump()
+                if sensor.style_config:
+                    final_style.update(sensor.style_config)
+                
+                export_viewshed_kml(
+                    viewshed_polygon=poly,
+                    output_path=out_path,
+                    altitude=alt,
+                    style_config=final_style,
+                    sensors=[{
+                        'name': sensor.name,
+                        'location': (sensor.longitude, sensor.latitude),
+                        'style_config': final_style
+                    }],
+                    document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
+                    altitude_mode=altitude_mode,
+                    kml_export_mode=settings.kml_export_altitude_mode
+                )
+                
+                if verbose >= 1:
+                    prog.console.print(f"    [green]Saved {filename}[/green]")
+                
+                if verbose >= 2:
+                    log_memory_usage(log, f"After {sensor.name} @ {alt}m")
+                
+                # Update state
+                state_manager.update_state(sensor.name, alt, current_hash, filename)
                     
-                    cfg_dict = settings.model_dump()
-                    poly = compute_viewshed(
-                        sensor, 
-                        alt, 
-                        dem_client, 
-                        cfg_dict, 
-                        progress_callback=_update_progress, 
-                        rich_progress=prog,
-                        altitude_mode=altitude_mode
-                    )
-                    
-                    out_path = out_dir_path / filename
-                    
-                    # Merge sensor style with default style
-                    final_style = settings.style.model_dump()
-                    if sensor.style_config:
-                        final_style.update(sensor.style_config)
-                    
-                    export_viewshed_kml(
-                        viewshed_polygon=poly,
-                        output_path=out_path,
-                        altitude=alt,
-                        style_config=final_style,
-                        sensors=[{
-                            'name': sensor.name,
-                            'location': (sensor.longitude, sensor.latitude),
-                            'style_config': final_style
-                        }],
-                        document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
-                        altitude_mode=altitude_mode,
-                        kml_export_mode=settings.kml_export_altitude_mode
-                    )
-                    
-                    if verbose >= 1:
-                        prog.console.print(f"    [green]Saved {filename}[/green]")
-                    
-                    if verbose >= 2:
-                        log_memory_usage(log, f"After {sensor.name} @ {alt}m")
-                    
-                    # Update state
-                    state_manager.update_state(sensor.name, alt, current_hash)
-                        
-                except Exception as e:
-                    log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
-                    prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
-                finally:
-                    prog.remove_task(calc_task)
-                    current_step += 100
-                    prog.update(overall_task, completed=current_step)
+            except Exception as e:
+                log.error(f"Failed to compute viewshed for {sensor.name} @ {alt}m: {e}", exc_info=True)
+                prog.console.print(f"[red]    Failed to compute viewshed for {sensor.name} @ {alt}m: {e}[/red]")
+            finally:
+                prog.remove_task(calc_task)
+                current_step += 100
+                prog.update(overall_task, completed=current_step)
+                # Restore original height
+                sensor.sensor_height_m_agl = original_h
             
     print("[green]Viewshed computation complete.[/green]")
     

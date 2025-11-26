@@ -1,6 +1,6 @@
 # Configuration Guide
 
-RangePlotter is highly configurable via the `config/config.yaml` file. This file controls default behaviors, output paths, and calculation parameters.
+RangePlotter is highly configurable via the `config/config.yaml` file. This file controls default behaviours, output paths, and calculation parameters.
 
 ## Key Settings
 
@@ -29,7 +29,11 @@ target_altitude_reference: "agl"
 Default height of the sensor above the ground.
 ```yaml
 sensor_height_m_agl: 5.0
+# OR
+sensor_height_m_agl: [10.0, 20.0, 50.0]
 ```
+*   **Single Value**: All sensors use this height unless overridden.
+*   **List**: The tool will calculate a separate viewshed for *each* height in the list.
 *Note: This can be overridden per-sensor using KML input (see [Features](features.md)).*
 
 ### KML Export Mode
