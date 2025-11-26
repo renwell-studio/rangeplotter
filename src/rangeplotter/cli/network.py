@@ -63,26 +63,78 @@ def run(
             output_str = Prompt.ask("Output directory", default=default_output)
             output_dir = Path(output_str)
 
-        # 3. Review Configuration
-        print("\n[bold]Configuration Review:[/bold]")
-        table = Table(show_header=False, box=None)
-        table.add_column("Setting", style="cyan")
-        table.add_column("Value", style="yellow")
-        
-        table.add_row("Input Path", str(input_path))
-        table.add_row("Output Directory", str(output_dir))
-        table.add_row("Target Altitudes", str(settings.effective_altitudes) + f" ({settings.target_altitude_reference.upper()})")
-        table.add_row("Sensor Height", f"{settings.sensor_height_m_agl} m AGL")
-        table.add_row("Atmosphere (k)", str(settings.atmospheric_k_factor))
-        table.add_row("Detection Ranges", str(settings.detection_ranges) if settings.detection_ranges else "None (using defaults)")
-        table.add_row("Multiscale", f"Enabled (Near: {settings.multiscale.res_near_m}m, Far: {settings.multiscale.res_far_m}m)" if settings.multiscale.enable else "Disabled")
-        
-        print(table)
-        print("")
+        while True:
+            # 3. Configure Settings
+            print("\n[bold]Configuration Settings:[/bold]")
+            
+            # Target Altitudes
+            default_alts = ",".join(map(str, settings.altitudes_msl_m))
+            alts_str = Prompt.ask("Target Altitudes (m, comma-separated)", default=default_alts)
+            try:
+                settings.altitudes_msl_m = [float(x.strip()) for x in alts_str.split(",") if x.strip()]
+            except ValueError:
+                print("[red]Invalid altitude format. Using defaults.[/red]")
 
-        if not Confirm.ask("Proceed with these settings?", default=True):
-            print("[yellow]Analysis cancelled.[/yellow]")
-            raise typer.Exit(code=0)
+            # Reference
+            settings.target_altitude_reference = Prompt.ask(
+                "Target Altitude Reference", 
+                choices=["agl", "msl"], 
+                default=settings.target_altitude_reference
+            )
+
+            # Sensor Height
+            h_str = Prompt.ask("Default Sensor Height (m AGL)", default=str(settings.sensor_height_m_agl))
+            try:
+                settings.sensor_height_m_agl = float(h_str)
+            except ValueError:
+                print("[red]Invalid height. Using default.[/red]")
+
+            # Atmosphere
+            k_str = Prompt.ask("Atmospheric Refraction (k-factor)", default=str(settings.atmospheric_k_factor))
+            try:
+                settings.atmospheric_k_factor = float(k_str)
+            except ValueError:
+                print("[red]Invalid k-factor. Using default.[/red]")
+
+            # Detection Ranges
+            default_ranges = ",".join(map(str, settings.detection_ranges))
+            ranges_str = Prompt.ask("Detection Ranges (km, comma-separated)", default=default_ranges)
+            try:
+                settings.detection_ranges = [float(x.strip()) for x in ranges_str.split(",") if x.strip()]
+            except ValueError:
+                print("[red]Invalid range format. Using defaults.[/red]")
+
+            # Multiscale
+            settings.multiscale.enable = Confirm.ask(
+                "Enable Multiscale Processing (faster)?", 
+                default=settings.multiscale.enable
+            )
+
+            # 4. Review Configuration
+            print("\n[bold]Configuration Review:[/bold]")
+            table = Table(show_header=False, box=None)
+            table.add_column("Setting", style="cyan")
+            table.add_column("Value", style="yellow")
+            
+            table.add_row("Input Path", str(input_path))
+            table.add_row("Output Directory", str(output_dir))
+            table.add_row("Target Altitudes", str(settings.effective_altitudes) + f" ({settings.target_altitude_reference.upper()})")
+            table.add_row("Sensor Height", f"{settings.sensor_height_m_agl} m AGL")
+            table.add_row("Atmosphere (k)", str(settings.atmospheric_k_factor))
+            table.add_row("Detection Ranges", str(settings.detection_ranges) if settings.detection_ranges else "None")
+            table.add_row("Multiscale", f"Enabled (Near: {settings.multiscale.res_near_m}m, Far: {settings.multiscale.res_far_m}m)" if settings.multiscale.enable else "Disabled")
+            
+            print(table)
+            print("")
+
+            if Confirm.ask("Proceed with these settings?", default=True):
+                break
+            
+            if not Confirm.ask("Would you like to revise the settings?", default=True):
+                print("[yellow]Analysis cancelled.[/yellow]")
+                raise typer.Exit(code=0)
+            
+            print("\n[dim]Restarting configuration wizard...[/dim]")
 
     # --- Non-Interactive Defaults ---
     else:
@@ -105,9 +157,18 @@ def run(
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Save run configuration
+    import yaml
+    run_config_path = output_dir / "run_config.yaml"
+    with open(run_config_path, 'w') as f:
+        # Dump settings to YAML
+        # We use model_dump(mode='json') to ensure serialization of types
+        yaml.dump(settings.model_dump(mode='json'), f)
+    
     print(f"[bold blue]Starting Network Analysis[/bold blue]")
     print(f"Input: {input_path}")
     print(f"Output: {output_dir}")
+    print(f"Config: {run_config_path}")
 
     
     # 1. Run Viewshed
@@ -116,12 +177,14 @@ def run(
         sys.executable, "-m", "rangeplotter", "viewshed",
         "--input", str(input_path),
         "--output", str(viewshed_dir),
+        "--config", str(run_config_path),
         "--verbose" if verbose > 0 else "",
     ]
     if verbose > 1:
         cmd_viewshed.append("-vv")
-    if config:
-        cmd_viewshed.extend(["--config", str(config)])
+    # Config is now always passed via run_config_path
+    # if config:
+    #    cmd_viewshed.extend(["--config", str(config)])
     if force:
         cmd_viewshed.append("--force")
     if filter_pattern:
@@ -144,12 +207,13 @@ def run(
         sys.executable, "-m", "rangeplotter", "horizon",
         "--input", str(input_path),
         "--output", str(horizon_dir),
+        "--config", str(run_config_path),
         "--verbose" if verbose > 0 else "",
     ]
     if verbose > 1:
         cmd_horizon.append("-vv")
-    if config:
-        cmd_horizon.extend(["--config", str(config)])
+    # if config:
+    #    cmd_horizon.extend(["--config", str(config)])
         
     cmd_horizon = [c for c in cmd_horizon if c]
     
@@ -171,12 +235,13 @@ def run(
         sys.executable, "-m", "rangeplotter", "detection-range",
         "--input", viewshed_pattern,
         "--output", str(detection_dir),
+        "--config", str(run_config_path),
         "--verbose" if verbose > 0 else "",
     ]
     if verbose > 1:
         cmd_detection.append("-vv")
-    if config:
-        cmd_detection.extend(["--config", str(config)])
+    # if config:
+    #    cmd_detection.extend(["--config", str(config)])
         
     cmd_detection = [c for c in cmd_detection if c]
     
