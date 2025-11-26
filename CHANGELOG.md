@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hybrid Distribution Model**: Now releasing both a standalone binary (Linux) and a standard Python Wheel (`.whl`) for cross-platform/developer use.
 - **Graceful Upgrade Script**: Added `install_or_upgrade.sh` to the binary release. This script automates installation and upgrades while preserving user configuration (`config.yaml`) and data.
 - **Release Candidate Workflow**: CI/CD pipeline now supports `-rc` tags (e.g., `v0.1.5-rc1`) for pre-release testing.
+- **KML Export Altitude Mode**: Added `kml_export_altitude_mode` to `config.yaml`. Defaults to `"clamped"` (clampToGround) for better visualization in Google Earth, with an option for `"absolute"` to render at the calculated target altitude.
 
 ### Changed
 - Updated `README.md` with comprehensive installation instructions for the new distribution methods.
