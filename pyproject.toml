@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rangeplotter"
-version = "0.1.5-rc2"
+version = "0.1.5-rc3"
 description = "Radar line-of-sight terrain visibility utility"
 authors = [{name="Renwell Studio", email="support@renwell.studio"}]
 readme = "README.md"
@@ -33,6 +33,9 @@ dependencies = [
     "psutil>=5.9.0",
     "PyYAML>=6.0"
 ]
+
+[project.scripts]
+rangeplotter = "rangeplotter.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

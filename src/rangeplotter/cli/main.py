@@ -21,7 +21,7 @@ import time
 import re
 import yaml
 
-__version__ = "0.1.5-rc2"
+__version__ = "0.1.5-rc3"
 
 app = typer.Typer(help="Radar LOS utility", context_settings={"help_option_names": ["-h", "--help"]})
 app.add_typer(network.app, name="network")
@@ -227,6 +227,7 @@ def horizon(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
     output_dir: Optional[Path] = typer.Option(default_horizon_dir, "--output", "-o", help="Override output directory"),
+    filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -256,6 +257,19 @@ def horizon(
         raise typer.Exit(code=1)
         
     radars = _load_radars(kml_files, settings.sensor_height_m_agl)
+
+    if filter_pattern:
+        import re
+        try:
+            pattern = re.compile(filter_pattern)
+            radars = [r for r in radars if pattern.search(r.name)]
+            if not radars:
+                typer.echo(f"[yellow]No sensors matched filter '{filter_pattern}'.[/yellow]")
+                raise typer.Exit(code=0)
+            typer.echo(f"Filtered to {len(radars)} sensors matching '{filter_pattern}'")
+        except re.error as e:
+            typer.echo(f"[red]Invalid regex pattern: {e}[/red]")
+            raise typer.Exit(code=1)
     
     if verbose >= 2:
         print("[grey58]DEBUG: settings loaded, radars parsed.[/grey58]")
@@ -303,29 +317,6 @@ def horizon(
         if verbose >= 1:
             print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
 
-    # 2. Ensure full DEM coverage for the maximum possible range
-    # Now that we have ground elevations, we can calculate the true horizon distance.
-    if verbose >= 1:
-        print("\n[bold blue]Verifying DEM Coverage...[/bold blue]")
-    max_target_alt = max(altitudes)
-    from rangeplotter.geo.earth import mutual_horizon_distance
-    
-    for r in radars:
-        # Calculate max horizon based on radar height + max target altitude
-        # radar_height_m_msl property now uses the sampled ground elevation
-        radar_h = r.radar_height_m_msl or 0.0
-        horizon_m = mutual_horizon_distance(radar_h, max_target_alt, r.latitude, settings.atmospheric_k_factor)
-        
-        # Add a 5% buffer to match viewshed logic
-        search_radius = horizon_m * 1.05
-        
-        if verbose >= 1:
-            print(f"  [cyan]•[/cyan] Checking coverage for [bold]{r.name}[/bold] (Radius: {search_radius/1000:.1f} km)...")
-        bbox_full = approximate_bounding_box(r.longitude, r.latitude, search_radius)
-        
-        # This will download any missing tiles for the full range
-        dem_client.ensure_tiles(bbox_full)
-        
     if verbose >= 2:
         print("[grey58]DEBUG: Starting horizon computation loop.")
     with progress.Progress(progress.SpinnerColumn(), progress.TextColumn("{task.description}"), console=console) as prog:
@@ -643,15 +634,9 @@ def viewshed(
         
         for sensor in radars:
             # Determine applicable heights for this sensor
-            if sensor.altitude_mode == 'relativeToGround' and sensor.input_altitude is not None and sensor.input_altitude > 0:
-                # Sensor has specific height defined in KML
-                heights = [0.0] # The sensor object already has the height baked in or handled
-                # Actually, looking at radar_site.py:
-                # if relativeToGround, radar_height_m_msl = ground + input_altitude + sensor_height_m_agl
-                # In kml.py, if relativeToGround, we set sensor_height_m_agl = 0.0
-                # So we should just use the sensor's current configuration as a single pass.
-                # But wait, if the user wants to test multiple heights, they probably want to override the KML?
-                # The requirement says: "only applies if sensor height agl is not specified in input kml"
+            # If the sensor has an explicit altitude mode (absolute/relative) from KML,
+            # we respect that and do not apply the default AGL sensor heights.
+            if (sensor.altitude_mode in ['relativeToGround', 'absolute']) and sensor.input_altitude is not None:
                 heights = [sensor.sensor_height_m_agl]
             else:
                 # Use the list from settings

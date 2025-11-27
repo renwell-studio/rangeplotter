@@ -43,6 +43,17 @@ def run(
     else:
         settings = load_settings()
 
+    # Resolve input path extensions if file not found
+    if input_path and not input_path.exists():
+        # Try appending extensions if no extension provided
+        if not input_path.suffix:
+            for ext in ['.csv', '.kml']:
+                candidate = input_path.with_suffix(ext)
+                if candidate.exists():
+                    input_path = candidate
+                    print(f"[dim]Resolved input to: {input_path}[/dim]")
+                    break
+
     # Override sensor heights if provided via CLI
     if sensor_heights_cli:
         parsed_heights = []
@@ -333,17 +344,31 @@ def run(
         
     # 2. Run Horizon
     print("\n[bold]Step 2: Calculating Horizons[/bold]")
-    cmd_horizon = [
-        sys.executable, "-m", "rangeplotter", "horizon",
-        "--input", str(input_path),
-        "--output", str(horizon_dir),
-        "--config", str(run_config_path),
-        "--verbose" if verbose > 0 else "",
-    ]
+    
+    if getattr(sys, 'frozen', False):
+        cmd_horizon = [
+            sys.executable, "horizon",
+            "--input", str(input_path),
+            "--output", str(horizon_dir),
+            "--config", str(run_config_path),
+            "--verbose" if verbose > 0 else "",
+        ]
+    else:
+        cmd_horizon = [
+            sys.executable, "-m", "rangeplotter", "horizon",
+            "--input", str(input_path),
+            "--output", str(horizon_dir),
+            "--config", str(run_config_path),
+            "--verbose" if verbose > 0 else "",
+        ]
+
     if verbose > 1:
         cmd_horizon.append("-vv")
     # if config:
     #    cmd_horizon.extend(["--config", str(config)])
+    
+    if filter_pattern:
+        cmd_horizon.extend(["--filter", filter_pattern])
         
     cmd_horizon = [c for c in cmd_horizon if c]
     
@@ -361,13 +386,23 @@ def run(
     # We use a glob pattern to find the KMLs
     viewshed_pattern = str(viewshed_dir / "*.kml")
     
-    cmd_detection = [
-        sys.executable, "-m", "rangeplotter", "detection-range",
-        "--input", viewshed_pattern,
-        "--output", str(detection_dir),
-        "--config", str(run_config_path),
-        "--verbose" if verbose > 0 else "",
-    ]
+    if getattr(sys, 'frozen', False):
+        cmd_detection = [
+            sys.executable, "detection-range",
+            "--input", viewshed_pattern,
+            "--output", str(detection_dir),
+            "--config", str(run_config_path),
+            "--verbose" if verbose > 0 else "",
+        ]
+    else:
+        cmd_detection = [
+            sys.executable, "-m", "rangeplotter", "detection-range",
+            "--input", viewshed_pattern,
+            "--output", str(detection_dir),
+            "--config", str(run_config_path),
+            "--verbose" if verbose > 0 else "",
+        ]
+
     if verbose > 1:
         cmd_detection.append("-vv")
     # if config:

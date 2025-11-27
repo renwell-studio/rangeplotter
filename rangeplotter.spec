@@ -26,7 +26,7 @@ hiddenimports += tmp_ret[2]
 
 a = Analysis(
     ['src/rangeplotter/cli/main.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

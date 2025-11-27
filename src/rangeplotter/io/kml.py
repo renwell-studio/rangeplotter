@@ -126,7 +126,7 @@ def parse_radars(kml_path: str, default_sensor_height_m: float) -> List[RadarSit
         # Extract style config
         style_config = extract_style_from_element(pm, style_url)
 
-        alt_mode_el = pm.find(f"{KML_NS}altitudeMode")
+        alt_mode_el = pm.find(f".//{KML_NS}altitudeMode")
         altitude_mode = alt_mode_el.text.strip() if alt_mode_el is not None and alt_mode_el.text else "clampToGround"
         if altitude_mode not in ALTITUDE_MODES:
             altitude_mode = "clampToGround"
@@ -149,9 +149,10 @@ def parse_radars(kml_path: str, default_sensor_height_m: float) -> List[RadarSit
         # Determine sensor height logic
         # If KML specifies relativeToGround and a valid altitude, use that as the sensor height
         # and set the additional sensor_height_m_agl to 0 to avoid double counting.
+        # If KML specifies absolute, we also assume the altitude includes the sensor height.
         # Otherwise, use the default sensor height from config.
         final_sensor_height = default_sensor_height_m
-        if altitude_mode == "relativeToGround" and alt is not None and alt > 0:
+        if (altitude_mode == "relativeToGround" or altitude_mode == "absolute") and alt is not None:
             final_sensor_height = 0.0
 
         radars.append(RadarSite(
