@@ -172,57 +172,116 @@ gh release create ${VERSION} release/rangeplotter_${VERSION}_linux.zip --repo re
 
 ---
 
-## Appendix: Testing Release Artifacts
+## Appendix: Pre-Release Local Testing
 
-To test packaging and installation workflows without breaking your main development environment, use **Virtual Environments** and **Temporary Directories**.
+Before pushing a release tag, it is critical to verify that the packaged artifacts (Wheel and Binary) function correctly. This process ensures that packaging-specific issues (e.g., missing dependencies, subprocess errors in frozen binaries) are caught early.
 
-### 1. Create a Throwaway Virtual Environment
-Isolate code and dependencies.
+**Goal:** Test the release candidate in a completely isolated environment without affecting your development setup or existing system installations.
+
+### 1. Build Artifacts Locally
+Generate the artifacts that CI/CD would normally build.
 
 ```bash
-# 1. Go to a temporary location
-cd /tmp
+# Install build tools if needed
+pip install build pyinstaller
 
-# 2. Create a fresh virtual environment
-python3 -m venv test_env
+# Clean previous builds
+rm -rf dist/ build/
 
-# 3. Activate it
-source test_env/bin/activate
+# Build Python Wheel
+python3 -m build
+
+# Build Linux Binary
+pyinstaller rangeplotter.spec --clean --noconfirm
 ```
 
-### 2. Install the Artifact
-Install the wheel built in the `dist/` folder.
+### 2. Test the Python Wheel (Pip Install)
+Use a temporary virtual environment to simulate a fresh user installation.
 
 ```bash
-# Assuming your project is at ~/Documents/Computing/rangeplotter
-pip install ~/Documents/Computing/rangeplotter/dist/rangeplotter-X.Y.Z-py3-none-any.whl
-```
+# 1. Create a throwaway environment in /tmp (outside your project)
+python3 -m venv /tmp/test_wheel_env
+source /tmp/test_wheel_env/bin/activate
 
-### 3. Test in a Clean Directory
-Isolate data and configuration. Create a fresh folder to act as the "User's Project".
+# 2. Install the newly built wheel
+# (Adjust filename to match version)
+pip install dist/rangeplotter-*-py3-none-any.whl
 
-```bash
-mkdir ~/test_project
-cd ~/test_project
+# 3. Create a clean workspace for data
+mkdir -p /tmp/test_wheel_workspace
+cd /tmp/test_wheel_workspace
 
-# Run the tool
+# 4. Run Verification
+# Verify version matches
 rangeplotter --version
-```
 
-### 4. Protect Global Config (Optional)
-If testing features that write to global config (e.g., `~/.config/rangeplotter`), override the environment variables to protect your real home directory.
+# Verify help text
+rangeplotter --help
 
-```bash
-export XDG_CONFIG_HOME=/tmp/fake_home/config
-export XDG_CACHE_HOME=/tmp/fake_home/cache
+# Verify complex commands (e.g., network run wizard)
+# Note: You may need to copy a config.yaml and .env here if the tool expects them
+rangeplotter network run --help
 
-rangeplotter init
-```
-
-### 5. Cleanup
-```bash
+# 5. Cleanup
 deactivate
-rm -rf /tmp/test_env
-rm -rf ~/test_project
+rm -rf /tmp/test_wheel_env
+rm -rf /tmp/test_wheel_workspace
 ```
+
+### 3. Test the Linux Binary (Standalone)
+Verify the frozen binary works, especially for commands that spawn subprocesses (like `network run`).
+
+```bash
+# 1. Create a clean workspace
+mkdir -p /tmp/test_binary_workspace
+cd /tmp/test_binary_workspace
+
+# 2. Run the binary directly from your dist folder
+# (Assuming you are still in the project root in another terminal, or copy it here)
+PROJECT_DIST=~/Documents/Computing/rangeplotter/dist
+
+# Verify Version
+$PROJECT_DIST/rangeplotter --version
+
+# Verify Subprocess Execution
+# This is critical for PyInstaller builds to ensure sys.executable is handled correctly
+$PROJECT_DIST/rangeplotter network run --help
+
+# 3. Cleanup
+rm -rf /tmp/test_binary_workspace
+```
+
+### 4. Test the Install Script
+Verify the upgrade logic without overwriting your actual installation.
+
+```bash
+# 1. Create a fake "existing install"
+mkdir -p /tmp/fake_install_location
+touch /tmp/fake_install_location/rangeplotter  # Dummy existing binary
+
+# 2. Create a fake release package folder
+mkdir -p /tmp/fake_release_pkg
+cp dist/rangeplotter /tmp/fake_release_pkg/
+cp scripts/install_or_upgrade.sh /tmp/fake_release_pkg/
+
+# 3. Run the script
+cd /tmp/fake_release_pkg
+chmod +x install_or_upgrade.sh
+./install_or_upgrade.sh
+# -> When prompted, enter: /tmp/fake_install_location
+
+# 4. Verify
+# Check if /tmp/fake_install_location/rangeplotter was updated
+ls -l /tmp/fake_install_location/rangeplotter
+
+# 5. Cleanup
+rm -rf /tmp/fake_install_location
+rm -rf /tmp/fake_release_pkg
+```
+
+---
+
+## Appendix: Testing Release Artifacts (Post-Release)
+
+To test artifacts *downloaded* from GitHub (after release) without breaking your main environment:
 
