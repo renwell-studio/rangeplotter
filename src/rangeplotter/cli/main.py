@@ -21,7 +21,7 @@ import time
 import re
 import yaml
 
-__version__ = "0.1.5-rc3"
+__version__ = "0.1.5"
 
 app = typer.Typer(help="Radar LOS utility", context_settings={"help_option_names": ["-h", "--help"]})
 app.add_typer(network.app, name="network")
