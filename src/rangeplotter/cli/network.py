@@ -190,9 +190,19 @@ def run(
             # Sensor Height
             h_str = Prompt.ask("Default Sensor Height (m AGL)", default=str(settings.sensor_height_m_agl))
             try:
-                settings.sensor_height_m_agl = float(h_str)
+                # Handle list format (e.g. "[2.0, 5.0]") or comma-separated string
+                clean_str = h_str.strip("[]").replace("'", "").replace('"', "")
+                parts = [float(x.strip()) for x in clean_str.split(",") if x.strip()]
+                
+                if not parts:
+                    raise ValueError("No valid heights provided")
+                
+                if len(parts) == 1:
+                    settings.sensor_height_m_agl = parts[0]
+                else:
+                    settings.sensor_height_m_agl = sorted(list(set(parts)))
             except ValueError:
-                print("[red]Invalid height. Using default.[/red]")
+                print("[red]Invalid height format. Using default.[/red]")
 
             # Atmosphere
             k_str = Prompt.ask("Atmospheric Refraction (k-factor)", default=str(settings.atmospheric_k_factor))

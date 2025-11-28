@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5-rc4] - 2025-11-28
+### Fixed
+- **Network Run Wizard**: Fixed a parsing issue in the network run wizard causing it to reject multiple sensor heights.
+
 ## [0.1.5-rc3] - 2025-11-27
 ### Fixed
 - **Absolute Altitude Logic**: Fixed a critical bug where the default sensor height offset was incorrectly added to sensors defined with `absolute` altitude mode in KML inputs. Absolute altitudes are now treated as exact MSL values.
