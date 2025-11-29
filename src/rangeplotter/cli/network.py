@@ -326,8 +326,8 @@ def run(
     # Add optional flags
     if verbose > 0:
         cmd_viewshed.append("--verbose")
-        if verbose > 1:
-            cmd_viewshed.append("-v") # Add extra v for debug
+    if verbose > 1:
+        cmd_viewshed.append("-v") # Add extra v for debug
             
     if force:
         cmd_viewshed.append("--force")
@@ -335,30 +335,10 @@ def run(
     if filter_pattern:
         cmd_viewshed.extend(["--filter", filter_pattern])
         
-    # Pass sensor heights if configured (though they are in config, CLI override might be needed if we add that flag)
-    # For now, config handles it.
-    # Wait, if we overrode settings.sensor_height_m_agl via CLI in this process,
-    # we saved it to run_config.yaml.
-    # And we pass run_config.yaml to the subprocess.
-    # So the subprocess WILL pick up the new heights from the config file.
-    # No need to pass --sensor-heights explicitly to the subprocess unless we want to override the config file again.
-    # But the config file IS the source of truth for the run.
-    
-    if verbose > 0:
-        print(f"Running: {' '.join(cmd_viewshed)}")
-        cmd_viewshed.append("-vv")
-    # Config is now always passed via run_config_path
-    # if config:
-    #    cmd_viewshed.extend(["--config", str(config)])
-    if force:
-        cmd_viewshed.append("--force")
-    if filter_pattern:
-        cmd_viewshed.extend(["--filter", filter_pattern])
-        
     # Filter out empty strings
     cmd_viewshed = [c for c in cmd_viewshed if c]
     
-    if verbose >= 1:
+    if verbose >= 2:
         print(f"[dim]Running: {' '.join(cmd_viewshed)}[/dim]")
         
     result = subprocess.run(cmd_viewshed)
@@ -375,7 +355,6 @@ def run(
             "--input", str(input_path),
             "--output", str(horizon_dir),
             "--config", str(run_config_path),
-            "--verbose" if verbose > 0 else "",
         ]
     else:
         cmd_horizon = [
@@ -383,20 +362,19 @@ def run(
             "--input", str(input_path),
             "--output", str(horizon_dir),
             "--config", str(run_config_path),
-            "--verbose" if verbose > 0 else "",
         ]
 
+    if verbose > 0:
+        cmd_horizon.append("--verbose")
     if verbose > 1:
-        cmd_horizon.append("-vv")
-    # if config:
-    #    cmd_horizon.extend(["--config", str(config)])
+        cmd_horizon.append("-v")
     
     if filter_pattern:
         cmd_horizon.extend(["--filter", filter_pattern])
         
     cmd_horizon = [c for c in cmd_horizon if c]
     
-    if verbose >= 1:
+    if verbose >= 2:
         print(f"[dim]Running: {' '.join(cmd_horizon)}[/dim]")
 
     result = subprocess.run(cmd_horizon)
@@ -416,7 +394,6 @@ def run(
             "--input", viewshed_pattern,
             "--output", str(detection_dir),
             "--config", str(run_config_path),
-            "--verbose" if verbose > 0 else "",
         ]
     else:
         cmd_detection = [
@@ -424,17 +401,16 @@ def run(
             "--input", viewshed_pattern,
             "--output", str(detection_dir),
             "--config", str(run_config_path),
-            "--verbose" if verbose > 0 else "",
         ]
 
+    if verbose > 0:
+        cmd_detection.append("--verbose")
     if verbose > 1:
-        cmd_detection.append("-vv")
-    # if config:
-    #    cmd_detection.extend(["--config", str(config)])
+        cmd_detection.append("-v")
         
     cmd_detection = [c for c in cmd_detection if c]
     
-    if verbose >= 1:
+    if verbose >= 2:
         print(f"[dim]Running: {' '.join(cmd_detection)}[/dim]")
 
     result = subprocess.run(cmd_detection)
