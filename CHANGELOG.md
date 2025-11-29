@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Network Input Resolution**: Fixed issue where `network run` would fail to find input files if they were not in the current directory (now checks `working_files/sensor_locations` as a fallback, matching `viewshed` behavior).
 
+### Changed
+- **CLI Verbosity**: Standardized verbosity flags across all commands. `network run` now correctly passes `-v` (INFO) and `-vv` (DEBUG) to subprocesses, and only displays raw command strings at the DEBUG level.
+
 ### Documentation
 - **Getting Started**: Updated the "First Run" guide to clarify how to export placemarks from Google Earth.
 - **Configuration**: Added comments to `config.yaml` clarifying that `sensor_height_m_agl` accepts a comma-separated list of values.
