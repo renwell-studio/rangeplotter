@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - Unreleased
+### Fixed
+- **Network Input Resolution**: Fixed issue where `network run` would fail to find input files if they were not in the current directory (now checks `working_files/sensor_locations` as a fallback, matching `viewshed` behavior).
+
+### Documentation
+- **Getting Started**: Updated the "First Run" guide to clarify how to export placemarks from Google Earth.
+- **Configuration**: Added comments to `config.yaml` clarifying that `sensor_height_m_agl` accepts a comma-separated list of values.
+- **Metadata**: Added author details to the Python package metadata.
+
 ## [0.1.5] - 2025-11-28
 ### Added
 - **Sensor Height Array**: Added support for calculating viewsheds for multiple sensor heights in a single run. The `sensor_height_m_agl` setting in `config.yaml` now accepts a list of heights (e.g., `[10.0, 20.0]`).

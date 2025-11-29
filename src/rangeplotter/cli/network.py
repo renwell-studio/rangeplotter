@@ -45,14 +45,28 @@ def run(
 
     # Resolve input path extensions if file not found
     if input_path and not input_path.exists():
-        # Try appending extensions if no extension provided
-        if not input_path.suffix:
-            for ext in ['.csv', '.kml']:
-                candidate = input_path.with_suffix(ext)
-                if candidate.exists():
-                    input_path = candidate
-                    print(f"[dim]Resolved input to: {input_path}[/dim]")
-                    break
+        # 1. Try resolving relative to configured input_dir
+        potential_path = Path(settings.input_dir) / input_path
+        if potential_path.exists():
+            input_path = potential_path
+        else:
+            # 2. Try appending extensions if no extension provided (in CWD)
+            if not input_path.suffix:
+                for ext in ['.csv', '.kml']:
+                    candidate = input_path.with_suffix(ext)
+                    if candidate.exists():
+                        input_path = candidate
+                        print(f"[dim]Resolved input to: {input_path}[/dim]")
+                        break
+            
+            # 3. Try appending extensions in input_dir
+            if not input_path.exists() and not input_path.suffix:
+                 for ext in ['.csv', '.kml']:
+                    candidate = Path(settings.input_dir) / input_path.with_suffix(ext)
+                    if candidate.exists():
+                        input_path = candidate
+                        print(f"[dim]Resolved input to: {input_path}[/dim]")
+                        break
 
     # Override sensor heights if provided via CLI
     if sensor_heights_cli:
