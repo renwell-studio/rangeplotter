@@ -79,6 +79,7 @@ class Settings(BaseModel):
     copernicus_api: CopernicusAPIConfig
     logging: dict = Field(default_factory=lambda: {"level": "INFO"})
     detection_ranges: List[float] = []
+    union_outputs: bool = True
     
     # Internal field to track where config was loaded from
     _config_base_path: Optional[Path] = None

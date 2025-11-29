@@ -629,7 +629,6 @@ def viewshed(
     ) as prog:
         # Estimate total steps (radars * heights * altitudes)
         # This is an estimate because some radars might only have 1 height
-        total_steps = 0
         tasks_to_run = []
         
         for sensor in radars:
@@ -788,6 +787,7 @@ def detection_range(
     ranges: Optional[List[str]] = typer.Option(None, "--range", "-r", help="Detection ranges in km (can be comma separated). Overrides config when specified."),
     output_name: str = typer.Option(None, "--name", "-n", help="Output group name (default: sensor name or 'Union')"),
     output_dir: Path = typer.Option(default_detection_dir, "--output", "-o", help="Output directory"),
+    union: Optional[bool] = typer.Option(None, "--union/--no-union", help="Union all viewsheds into a single coverage map (default: True)"),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -800,6 +800,9 @@ def detection_range(
         settings = Settings.from_file(config)
     else:
         settings = load_settings()
+
+    # Resolve union setting
+    do_union = union if union is not None else settings.union_outputs
 
     from rich.console import Console
     console = Console()
@@ -994,95 +997,109 @@ def detection_range(
                         log.debug(f"Processing Alt: {alt}m{ref_str}{sh_str}{var_str}, Range: {rng}km with {len(scenario_items)} inputs")
                     prog.update(task, description=f"Processing Alt: {alt}m{ref_str}{sh_str}{var_str}, Range: {rng}km")
                     
-                    clipped_polys = []
-                    
-                    # Collect styles to merge or pick one
-                    # For union, we might just pick the first one or a default union style
-                    # For single, we use the item's style
-                    
+                    valid_results = []
                     for item in scenario_items:
                         if verbose >= 2:
                             log.debug(f"Clipping {item['name']} to {rng}km")
                         clipped = clip_viewshed(item['viewshed'], item['sensor'], rng)
                         if not clipped.is_empty:
-                            clipped_polys.append(clipped)
+                            valid_results.append({'poly': clipped, 'item': item})
                     
-                    if not clipped_polys:
+                    if not valid_results:
                         if verbose >= 2:
                             log.debug("No polygons remained after clipping.")
-                        # Only advance if this is the last variant, to keep progress bar somewhat sane?
-                        # Or just don't worry about it.
                         continue
-                    
-                    if verbose >= 2:
-                        log.debug(f"Unioning {len(clipped_polys)} polygons")
-                    final_poly = union_viewsheds(clipped_polys)
-                    
-                    # Determine output name
-                    if output_name:
-                        base_name = output_name
-                    elif len(scenario_items) == 1:
-                        # Try to extract sensor name from filename
-                        # viewshed-(.*)-tgt_alt
-                        m_name = re.search(r"viewshed-(.*)-tgt_alt", scenario_items[0]['file'].name)
-                        if m_name:
-                            base_name = m_name.group(1)
-                        else:
-                            base_name = scenario_items[0]['name']
-                    else:
-                        base_name = "Union"
-                    
-                    # Determine style
-                    # If single item, use its style. If union, use first item's style or default?
-                    # Let's use first item's style as base, but maybe ensure opacity is reasonable
-                    style_to_use = scenario_items[0]['style'].copy()
-                    if not style_to_use:
-                         style_to_use = {
-                            "line_color": "#00FF00",
-                            "line_width": 2,
-                            "fill_color": "#00FF00",
-                            "fill_opacity": 0.3
-                        }
-                    
-                    # Create specific output directory
-                    specific_out_dir = output_dir / base_name
-                    specific_out_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Construct filename
-                    # rangeplotter-[name]-tgt_alt_[alt]m[_ref]-det_rng_[rng]km[-varX].kml
-                    alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
-                    rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
-                    ref_suffix = f"_{ref}" if ref else ""
-                    var_suffix = f"-var{v_idx+1}" if max_variants > 1 else ""
-                    prefix = f"{i:02d}_"
-                    filename = f"{prefix}rangeplotter-{base_name}-tgt_alt_{alt_str}m{ref_suffix}-det_rng_{rng_str}km{var_suffix}.kml"
-                    kml_doc_name = filename.replace(".kml", "")
-                    
-                    sensors_list = []
-                    for item in scenario_items:
-                        sensors_list.append({
-                            'name': item['name'],
-                            'location': item['sensor'],
-                            'style_config': item['style']
-                        })
 
-                    export_viewshed_kml(
-                        viewshed_polygon=final_poly,
-                        output_path=specific_out_dir / filename,
-                        altitude=alt,
-                        style_config=style_to_use,
-                        sensors=sensors_list,
-                        document_name=kml_doc_name,
-                        altitude_mode=ref if ref else "msl",
-                        kml_export_mode=settings.kml_export_altitude_mode
-                    )
-                    
-                    created_files.append({
-                        "altitude": alt,
-                        "range": rng,
-                        "filename": filename,
-                        "path": specific_out_dir / filename
-                    })
+                    export_tasks = []
+                    if do_union:
+                        if verbose >= 2:
+                            log.debug(f"Unioning {len(valid_results)} polygons")
+                        final_poly = union_viewsheds([r['poly'] for r in valid_results])
+                        export_tasks.append({
+                            'poly': final_poly,
+                            'items': [r['item'] for r in valid_results],
+                            'is_union': True
+                        })
+                    else:
+                        if verbose >= 2:
+                            log.debug(f"Processing {len(valid_results)} polygons individually (no union)")
+                        for r in valid_results:
+                            export_tasks.append({
+                                'poly': r['poly'],
+                                'items': [r['item']],
+                                'is_union': False
+                            })
+
+                    for export_task in export_tasks:
+                        task_poly = export_task['poly']
+                        task_items = export_task['items']
+                        is_union = export_task['is_union']
+
+                        # Determine output name
+                        if output_name:
+                            base_name = output_name
+                            if not is_union and len(export_tasks) > 1:
+                                # Append sensor name if we are forcing a name but splitting outputs
+                                base_name = f"{base_name}_{task_items[0]['name']}"
+                        elif len(task_items) == 1:
+                            # Try to extract sensor name from filename
+                            # viewshed-(.*)-tgt_alt
+                            m_name = re.search(r"viewshed-(.*)-tgt_alt", task_items[0]['file'].name)
+                            if m_name:
+                                base_name = m_name.group(1)
+                            else:
+                                base_name = task_items[0]['name']
+                        else:
+                            base_name = "Union"
+                        
+                        # Determine style
+                        style_to_use = task_items[0]['style'].copy()
+                        if not style_to_use:
+                             style_to_use = {
+                                "line_color": "#00FF00",
+                                "line_width": 2,
+                                "fill_color": "#00FF00",
+                                "fill_opacity": 0.3
+                            }
+                        
+                        # Create specific output directory
+                        specific_out_dir = output_dir / base_name
+                        specific_out_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Construct filename
+                        alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
+                        rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
+                        ref_suffix = f"_{ref}" if ref else ""
+                        var_suffix = f"-var{v_idx+1}" if max_variants > 1 else ""
+                        prefix = f"{i:02d}_"
+                        filename = f"{prefix}rangeplotter-{base_name}-tgt_alt_{alt_str}m{ref_suffix}-det_rng_{rng_str}km{var_suffix}.kml"
+                        kml_doc_name = filename.replace(".kml", "")
+                        
+                        sensors_list = []
+                        for item in task_items:
+                            sensors_list.append({
+                                'name': item['name'],
+                                'location': item['sensor'],
+                                'style_config': item['style']
+                            })
+
+                        export_viewshed_kml(
+                            viewshed_polygon=task_poly,
+                            output_path=specific_out_dir / filename,
+                            altitude=alt,
+                            style_config=style_to_use,
+                            sensors=sensors_list,
+                            document_name=kml_doc_name,
+                            altitude_mode=ref if ref else "msl",
+                            kml_export_mode=settings.kml_export_altitude_mode
+                        )
+                        
+                        created_files.append({
+                            "altitude": alt,
+                            "range": rng,
+                            "filename": filename,
+                            "path": specific_out_dir / filename
+                        })
             
             # Advance progress bar for the group
             prog.advance(task, advance=len(final_ranges))

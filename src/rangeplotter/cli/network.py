@@ -23,6 +23,7 @@ def run(
     force: bool = typer.Option(False, "--force", help="Force recalculation even if output exists."),
     filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
     sensor_heights_cli: Optional[List[str]] = typer.Option(None, "--sensor-heights", "-sh", help="Sensor heights AGL in meters (comma separated). Overrides config."),
+    union: Optional[bool] = typer.Option(None, "--union/--no-union", help="Union detection range outputs"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip interactive confirmation (non-interactive mode)."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level")
 ):
@@ -81,6 +82,10 @@ def run(
         if parsed_heights:
             settings.sensor_height_m_agl = sorted(list(set(parsed_heights)))
             print(f"Using sensor heights from CLI: {settings.sensor_height_m_agl}")
+
+    # Override union setting if provided via CLI
+    if union is not None:
+        settings.union_outputs = union
 
     # --- Wizard / Interactive Mode ---
     if not yes:
@@ -233,6 +238,13 @@ def run(
             except ValueError:
                 print("[red]Invalid range format. Using defaults.[/red]")
 
+            # Union Outputs
+            if union is None:
+                settings.union_outputs = Confirm.ask(
+                    "Union viewsheds into single coverage map?", 
+                    default=settings.union_outputs
+                )
+
             # Multiscale
             settings.multiscale.enable = Confirm.ask(
                 "Enable Multiscale Processing (faster)?", 
@@ -251,6 +263,7 @@ def run(
             table.add_row("Sensor Height", f"{settings.sensor_height_m_agl} m AGL")
             table.add_row("Atmosphere (k)", str(settings.atmospheric_k_factor))
             table.add_row("Detection Ranges", str(settings.detection_ranges) if settings.detection_ranges else "None")
+            table.add_row("Union Outputs", str(settings.union_outputs))
             table.add_row("Multiscale", f"Enabled (Near: {settings.multiscale.res_near_m}m, Far: {settings.multiscale.res_far_m}m)" if settings.multiscale.enable else "Disabled")
             
             print(table)
@@ -407,6 +420,11 @@ def run(
         cmd_detection.append("--verbose")
     if verbose > 1:
         cmd_detection.append("-v")
+    
+    if settings.union_outputs:
+        cmd_detection.append("--union")
+    else:
+        cmd_detection.append("--no-union")
         
     cmd_detection = [c for c in cmd_detection if c]
     

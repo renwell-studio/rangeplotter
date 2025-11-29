@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.6] - Unreleased
+### Added
+- **Optional Union**: Added `--union` / `--no-union` flag to `detection-range` and `network run` commands. Users can now choose to output individual coverage maps for each sensor instead of a single unioned file. The default behavior remains `union=True`.
+- **Configurable Union**: Added `union_outputs` setting to `config.yaml` to control the default union behavior.
+
 ### Fixed
 - **Network Input Resolution**: Fixed issue where `network run` would fail to find input files if they were not in the current directory (now checks `working_files/sensor_locations` as a fallback, matching `viewshed` behavior).
 
