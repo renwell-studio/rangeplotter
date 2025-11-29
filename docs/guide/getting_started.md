@@ -39,9 +39,9 @@ RangePlotter uses high-resolution global terrain data (GLO-30) from the Copernic
 
 ## First Run
 
-1.  **Prepare Input**: Place a KML file containing your sensor location(s) in `working_files/sensor_locations/`. You can export this from Google Earth (Right-click Placemark -> Save Place As -> KML).
+1.  **Prepare Input**: Place a KML file containing your sensor location(s) in `working_files/sensor_locations/`. You can export this from Google Earth (Right-click placemark or folder of placemarks -> Save Place As -> KML).
 2.  **Run Viewshed**:
     ```bash
-    rangeplotter viewshed --input working_files/sensor_locations/my_sensor.kml
+    rangeplotter network run --input working_files/sensor_locations/my_sensor.kml
     ```
-3.  **View Output**: The results will be saved in `working_files/viewshed/`. Open the generated `.kml` file in Google Earth.
+3.  **View Output**: The results will be saved in `working_files/network/`. Open the generated `.kml` file(s) in Google Earth (File -> Import...).
