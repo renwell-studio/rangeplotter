@@ -22,7 +22,7 @@ RangePlotter is designed to be bandwidth-efficient. It checks your local cache f
 RangePlotter includes a robust system to save time and recover from interruptions.
 
 ### Smart Resume (Embedded State)
-RangePlotter embeds a cryptographic hash of the simulation parameters directly into the output KML files (in the `<ExtendedData>` section). This allows the tool to verify if an existing output file matches your current configuration.
+Calculating viewsheds is computationally expensive. RangePlotter embeds a cryptographic hash of the simulation parameters directly into the output KML files (in the `<ExtendedData>` section). This allows the tool to verify if an existing output file matches your current configuration.
 
 **What is tracked?**
 The hash ensures validity by tracking:
@@ -37,11 +37,13 @@ The hash ensures validity by tracking:
 *   **Robustness**: You can move, rename, or share your output files, and RangePlotter will still know exactly how they were generated.
 *   **Change Detection**: If you change a critical parameter (e.g., `atmospheric_k_factor` or sensor height) and re-run the analysis, RangePlotter detects the mismatch and automatically recalculates only the affected files.
 *   **Skipping**: If the parameters match the existing file, the calculation is skipped instantly.
+*   **Crash Recovery**: If a long multi-sensor calculation run fails (or you stop it mid-run), RangePlotter can restart from the last completed viewshed and avoid recalculating redundant viewsheds.
 
 ### Session Management
 The `network run` command automatically tracks your active session.
 *   **Crash Recovery**: If a long batch run is interrupted (e.g., power failure or Ctrl+C), simply running `network run` again will detect the incomplete session.
 *   **One-Click Resume**: The system will prompt you to resume the previous session, restoring your input/output paths and configuration automatically.
+The `viewshed` command will inspect every file in the `working_files/viewshed/` folder (but not any subfolders you may have created) for completed viewshed outputs matching the requested calculation and skips calculation where found (unless you use `--force`).
 
 ## Integrated Network Workflow
 The `network run` command streamlines the entire process for multi-site networks.
