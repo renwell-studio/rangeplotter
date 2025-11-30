@@ -23,6 +23,9 @@ Recommended for most Linux users. No Python environment is required.
         *   `working_files/`
         *   `data_cache/`
 
+    **Configuration Updates**:
+    When upgrading, the installer will update your `config.yaml` with any new settings required by the new version. It will also save a copy of the default configuration as `config.yaml.new`. This file is for reference only and is not used by the application; you can safely delete it or use it to see the default settings.
+
 ### Option 2: Python Wheel (Cross-Platform)
 For users with Python installed (Windows, macOS, Linux).
 
