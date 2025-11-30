@@ -54,7 +54,7 @@ jobs:
         cp README.md LICENSE example.env "$RELEASE_DIR/"
 
         # Copy Install Script
-        cp scripts/install_or_upgrade.sh "$RELEASE_DIR/"
+        cp scripts/install.sh "$RELEASE_DIR/"
         
         # Copy Sample Data
         cp "working_files/sensor_locations/radars_sample.kml" "$RELEASE_DIR/working_files/sensor_locations/"
