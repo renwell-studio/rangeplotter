@@ -700,8 +700,19 @@ def viewshed(
             
             filename = f"{prefix}rangeplotter-{safe_name}{sh_suffix}-tgt_alt_{alt_str}m_{ref_str}.kml"
             
+            # Calculate horizon for hash
+            radar_h = sensor.radar_height_m_msl or 0.0
+            horizon_m = mutual_horizon_distance(radar_h, alt, sensor.latitude, settings.atmospheric_k_factor)
+
             # Compute hash - include sensor height!
-            current_hash = state_manager.compute_hash(sensor, alt, settings.atmospheric_k_factor)
+            current_hash = state_manager.compute_hash(
+                sensor, 
+                alt, 
+                settings.atmospheric_k_factor,
+                earth_radius_model=settings.earth_model.type,
+                max_range=horizon_m,
+                sensor_height_m_agl=sensor_h
+            )
             # Note: compute_hash uses sensor.radar_height_m_msl, which uses sensor.sensor_height_m_agl
             # So modifying sensor.sensor_height_m_agl above correctly affects the hash.
             
@@ -765,7 +776,7 @@ def viewshed(
                     "Max Range": f"{mutual_horizon_distance(sensor.radar_height_m_msl or 0, alt, sensor.latitude, settings.atmospheric_k_factor)/1000:.1f} km (Horizon)",
                     "Refraction Factor (k)": settings.atmospheric_k_factor,
                     "Earth Radius Model": settings.earth_model.ellipsoid,
-                    "Smart Resume Hash": current_hash
+                    "state_hash": current_hash
                 }
 
                 export_viewshed_kml(

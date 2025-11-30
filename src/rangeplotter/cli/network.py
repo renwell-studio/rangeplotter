@@ -2,6 +2,7 @@ from rangeplotter.config.settings import Settings, load_settings
 from rangeplotter.io.kml import parse_radars
 from rangeplotter.io.csv_input import parse_csv_radars
 from rangeplotter.models.radar_site import RadarSite
+from rangeplotter.utils.session import SessionManager
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
 import datetime
@@ -87,12 +88,26 @@ def run(
     if union is not None:
         settings.union_outputs = union
 
+    # --- Session Management ---
+    session_mgr = SessionManager(Path("working_files"))
+
     # --- Wizard / Interactive Mode ---
     if not yes:
         print(f"\n[bold cyan]RangePlotter Network Analysis Wizard[/bold cyan]")
         print("[dim]This wizard will help you configure the analysis run.[/dim]\n")
-
-        # 1. Resolve Input
+        
+        if not input_path and not output_dir:
+            last_session = session_mgr.load_last_session()
+            if last_session:
+                print(f"\n[bold]Found previous session:[/bold]")
+                print(f"  Input: {last_session.get('input_path')}")
+                print(f"  Output: {last_session.get('output_dir')}")
+                print(f"  Time: {last_session.get('timestamp')}")
+                
+                if Confirm.ask("Resume this session?", default=True):
+                    input_path = Path(str(last_session.get('input_path')))
+                    output_dir = Path(str(last_session.get('output_dir')))
+                    print("[green]Resuming session...[/green]")        # 1. Resolve Input
         if not input_path:
             default_input = "examples/radars.csv"
             input_str = Prompt.ask("Input file or directory", default=default_input)
@@ -438,3 +453,6 @@ def run(
         
     print("\n[bold green]Network Analysis Complete![/bold green]")
     print(f"Results available in: {output_dir}")
+    
+    # Save session for smart resume
+    session_mgr.save_session(input_path, output_dir, run_config_path)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from xml.etree import ElementTree as ET
 from typing import List, Tuple, Optional, Union
+from pathlib import Path
 from rangeplotter.models.radar_site import RadarSite
 from shapely.geometry import Polygon, MultiPolygon
 
@@ -30,7 +31,7 @@ def parse_radars(kml_path: str, default_sensor_height_m: float) -> List[RadarSit
                 key = pair.find(f"{KML_NS}key")
                 if key is not None and key.text == "normal":
                     url = pair.find(f"{KML_NS}styleUrl")
-                    if url is not None:
+                    if url is not None and url.text:
                         normal_style_url = url.text.strip()
                         break
             if normal_style_url:
@@ -383,5 +384,26 @@ def parse_viewshed_kml(kml_path: str) -> List[dict]:
              results.append({'folder_name': None, 'sensor': sensor, 'sensor_name': s_name, 'viewshed': viewshed, 'style': style})
                         
     return results
+
+def read_metadata_from_kml(kml_path: Union[str, Path]) -> dict:
+    """
+    Read metadata from KML ExtendedData.
+    Returns a dictionary of key-value pairs found in ExtendedData.
+    """
+    try:
+        tree = ET.parse(kml_path)
+        root = tree.getroot()
+        
+        data = {}
+        # Search for ExtendedData anywhere in the document
+        for extended_data in root.findall(f".//{KML_NS}ExtendedData"):
+            for data_node in extended_data.findall(f"{KML_NS}Data"):
+                name = data_node.get("name")
+                value_node = data_node.find(f"{KML_NS}value")
+                if name and value_node is not None and value_node.text:
+                    data[name] = value_node.text
+        return data
+    except Exception:
+        return {}
 
 __all__ = ["parse_radars", "parse_viewshed_kml"]
