@@ -18,11 +18,30 @@ RangePlotter is designed to be bandwidth-efficient. It checks your local cache f
 *   **Lazy Authentication**: The tool only connects to the Copernicus API if it *needs* to download missing tiles. If all required data is cached, it will not ask for credentials or require an internet connection.
 *   **Offline Field Use**: You can "pre-load" an area by running a viewshed (or using `--download-only`) while online. You can then take your laptop into the field and run new analyses in that same area completely offline.
 
-## Smart Resume
-RangePlotter tracks the state of your simulations to avoid redundant work.
-*   **How it works**: Before calculating a viewshed, the system computes a unique "hash" based on the sensor location, target altitude, and physics parameters.
-*   **Benefit**: If you re-run a large network analysis (e.g., after adding a new site or fixing a config error), RangePlotter will instantly skip any viewsheds that have already been successfully calculated with the same parameters.
-*   **Override**: Use the `--force` flag to bypass this check and force a recalculation.
+## Smart Resume & Session Management
+RangePlotter includes a robust system to save time and recover from interruptions.
+
+### Smart Resume (Embedded State)
+Instead of relying on external files, RangePlotter embeds a cryptographic hash of the simulation parameters directly into the output KML files (in the `<ExtendedData>` section).
+
+**What is tracked?**
+The hash ensures validity by tracking:
+*   Sensor location (Lat/Lon)
+*   Sensor effective height (Ground Elevation + Tower Height)
+*   Target altitude
+*   Atmospheric refraction factor (k-factor)
+*   Earth radius model
+*   Maximum horizon range
+
+**Benefits:**
+*   **Robustness**: You can move, rename, or share your output files, and RangePlotter will still know exactly how they were generated.
+*   **Change Detection**: If you change a critical parameter (e.g., `atmospheric_k_factor` or sensor height) and re-run the analysis, RangePlotter detects the mismatch and automatically recalculates only the affected files.
+*   **Skipping**: If the parameters match the existing file, the calculation is skipped instantly.
+
+### Session Management
+The `network run` command automatically tracks your active session.
+*   **Crash Recovery**: If a long batch run is interrupted (e.g., power failure or Ctrl+C), simply running `network run` again will detect the incomplete session.
+*   **One-Click Resume**: The system will prompt you to resume the previous session, restoring your input/output paths and configuration automatically.
 
 ## Integrated Network Workflow
 The `network run` command streamlines the entire process for multi-site networks.
@@ -58,16 +77,4 @@ RangePlotter employs a "multiscale" approach to balance speed and accuracy.
 ## Sequential Filenaming
 Output files are automatically prefixed with numbers (e.g., `01_`, `02_`) based on the target altitude. This ensures that when you load a folder of results into Google Earth, they appear in a logical order (lowest altitude to highest).
 
-## Smart Resume
-RangePlotter tracks the state of your simulations to avoid redundant work.
-*   **How it works**: Before calculating a viewshed, the system computes a unique "hash" based on the sensor location, target altitude, and physics parameters.
-*   **Benefit**: If you re-run a large network analysis (e.g., after adding a new site or fixing a config error), RangePlotter will instantly skip any viewsheds that have already been successfully calculated with the same parameters.
-*   **Override**: Use the `--force` flag to bypass this check and force a recalculation.
 
-## Integrated Network Workflow
-The `network run` command streamlines the entire process for multi-site networks.
-1.  **Viewshed**: Calculates visibility for all sites.
-2.  **Horizon**: Computes theoretical max ranges.
-3.  **Detection Range**: Clips viewsheds to instrument limits and creates composite coverage maps.
-
-This command also supports an **Interactive Wizard** mode to guide you through the setup if you don't provide command-line arguments.
