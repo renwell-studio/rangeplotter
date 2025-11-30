@@ -322,6 +322,9 @@ def run(
         # We use model_dump(mode='json') to ensure serialization of types
         yaml.dump(settings.model_dump(mode='json'), f)
     
+    # Save session for smart resume (incomplete initially)
+    session_mgr.save_session(input_path, output_dir, run_config_path, status="incomplete")
+
     print(f"[bold blue]Starting Network Analysis[/bold blue]")
     print(f"Input: {input_path}")
     print(f"Output: {output_dir}")
@@ -454,5 +457,5 @@ def run(
     print("\n[bold green]Network Analysis Complete![/bold green]")
     print(f"Results available in: {output_dir}")
     
-    # Save session for smart resume
-    session_mgr.save_session(input_path, output_dir, run_config_path)
+    # Mark session as complete
+    session_mgr.update_status("complete")

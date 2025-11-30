@@ -716,14 +716,27 @@ def viewshed(
             # Note: compute_hash uses sensor.radar_height_m_msl, which uses sensor.sensor_height_m_agl
             # So modifying sensor.sensor_height_m_agl above correctly affects the hash.
             
-            if not force and not state_manager.should_run(sensor.name, alt, current_hash, filename):
+            should_run = force
+            if not should_run:
+                should_run = state_manager.should_run(sensor.name, alt, current_hash, filename)
+                
+            if not should_run:
                 if verbose >= 1:
-                    prog.console.print(f"[dim]Skipping {sensor.name} (SH: {sensor_h}m) @ {alt}m (already exists)[/dim]")
+                    prog.console.print(f"[dim][INFO] Skipping: {filename} (Already exists, hash match)[/dim]")
                 prog.update(overall_task, completed=current_step + 100)
                 current_step += 100
                 # Restore original height
                 sensor.sensor_height_m_agl = original_h
                 continue
+            
+            # If we are running, check if it's a recalculation (file exists but hash mismatch)
+            out_path_check = out_dir_path / filename
+            if out_path_check.exists() and not force:
+                 if verbose >= 1:
+                    prog.console.print(f"[yellow][INFO] Recalculating: {filename} (Parameters changed)[/yellow]")
+            elif out_path_check.exists() and force:
+                 if verbose >= 1:
+                    prog.console.print(f"[yellow][INFO] Recalculating: {filename} (Forced)[/yellow]")
 
             prog.update(overall_task, description=f"Computing viewshed for {sensor.name} (SH: {sensor_h}m) @ {alt}m")
             calc_task = prog.add_task(f"  {sensor.name} @ {alt}m", total=100)
