@@ -22,7 +22,7 @@ RangePlotter is designed to be bandwidth-efficient. It checks your local cache f
 RangePlotter includes a robust system to save time and recover from interruptions.
 
 ### Smart Resume (Embedded State)
-Instead of relying on external files, RangePlotter embeds a cryptographic hash of the simulation parameters directly into the output KML files (in the `<ExtendedData>` section).
+RangePlotter embeds a cryptographic hash of the simulation parameters directly into the output KML files (in the `<ExtendedData>` section). This allows the tool to verify if an existing output file matches your current configuration.
 
 **What is tracked?**
 The hash ensures validity by tracking:

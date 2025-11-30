@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.6] - Unreleased
 ### Added
+- **Robust Smart Resume**: Replaced external state files with embedded cryptographic hashes in KML `<ExtendedData>`. This ensures that output files are self-verifying and portable.
+- **Session Management**: The `network run` command now tracks the last active session in `working_files/last_session.json`, allowing for one-click resumption of interrupted batch jobs.
 - **Optional Union**: Added `--union` / `--no-union` flag to `detection-range` and `network run` commands. Users can now choose to output individual coverage maps for each sensor instead of a single unioned file. The default behavior remains `union=True`.
 - **Configurable Union**: Added `union_outputs` setting to `config.yaml` to control the default union behavior.
 - **Enhanced Metadata**: KML outputs now include detailed metadata (Sensor Height, Ground Elevation, Refraction, etc.) in both HTML popups and machine-readable `<ExtendedData>`.
