@@ -107,7 +107,12 @@ def test_export_horizons_kml(tmp_path):
         "R1": [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]
     }
     meta = {
-        "R1": (0.0, 0.0)
+        "R1": {
+            "lat": 0.0,
+            "lon": 0.0,
+            "ground_elev": 0.0,
+            "height_agl": 0.0
+        }
     }
     style = {
         "line_color": "#FF0000",

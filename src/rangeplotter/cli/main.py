@@ -20,6 +20,7 @@ from rangeplotter.cli import network
 import time
 import re
 import yaml
+import datetime
 
 __version__ = "0.1.5"
 
@@ -328,7 +329,12 @@ def horizon(
                 print(f"[grey58]DEBUG: Computing horizons for {r.name}.")
             rings = compute_horizons([r], altitudes, settings.atmospheric_k_factor)
             rings_all.update(rings)
-            meta[r.name] = (r.longitude, r.latitude)
+            meta[r.name] = {
+                'lon': r.longitude,
+                'lat': r.latitude,
+                'ground_elev': r.ground_elevation_m_msl,
+                'height_agl': r.sensor_height_m_agl
+            }
             prog.advance(task)
     if verbose >= 2:
         print("[grey58]DEBUG: Horizon computation finished. Beginning export.")
@@ -341,7 +347,16 @@ def horizon(
     out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
     kml_path = out_path / "horizons.kml"
-    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode)
+    
+    metadata = {
+        "Utility": f"RangePlotter {__version__}",
+        "Command": "horizon",
+        "Date": datetime.datetime.now().isoformat(),
+        "Earth Radius Model": "Effective Radius (4/3 Earth)" if abs(settings.atmospheric_k_factor - 1.333) < 0.001 else f"k={settings.atmospheric_k_factor}",
+        "Refraction Factor (k)": settings.atmospheric_k_factor,
+    }
+    
+    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=metadata)
     if verbose >= 2:
         print("[grey58]DEBUG: Export complete.")
     print(f"[green]Exported horizons to {kml_path}[/green]")
@@ -737,6 +752,22 @@ def viewshed(
                 if sensor.style_config:
                     final_style.update(sensor.style_config)
                 
+                metadata = {
+                    "Utility": f"RangePlotter {__version__}",
+                    "Command": "viewshed",
+                    "Date": datetime.datetime.now().isoformat(),
+                    "Sensor Name": sensor.name,
+                    "Sensor Location": f"{sensor.latitude:.5f}, {sensor.longitude:.5f}",
+                    "Sensor Ground Elevation": f"{sensor.ground_elevation_m_msl:.1f} m MSL",
+                    "Sensor Height (AGL)": f"{sensor.sensor_height_m_agl} m",
+                    "Sensor Height (MSL)": f"{sensor.radar_height_m_msl:.1f} m" if sensor.radar_height_m_msl else "N/A",
+                    "Target Altitude": f"{alt} m ({altitude_mode.upper()})",
+                    "Max Range": f"{mutual_horizon_distance(sensor.radar_height_m_msl or 0, alt, sensor.latitude, settings.atmospheric_k_factor)/1000:.1f} km (Horizon)",
+                    "Refraction Factor (k)": settings.atmospheric_k_factor,
+                    "Earth Radius Model": settings.earth_model.ellipsoid,
+                    "Smart Resume Hash": current_hash
+                }
+
                 export_viewshed_kml(
                     viewshed_polygon=poly,
                     output_path=out_path,
@@ -749,7 +780,8 @@ def viewshed(
                     }],
                     document_name=f"viewshed-{safe_name}-tgt_alt_{alt_str}m_{ref_str}",
                     altitude_mode=altitude_mode,
-                    kml_export_mode=settings.kml_export_altitude_mode
+                    kml_export_mode=settings.kml_export_altitude_mode,
+                    metadata=metadata
                 )
                 
                 if verbose >= 1:
@@ -1083,6 +1115,40 @@ def detection_range(
                                 'style_config': item['style']
                             })
 
+                        metadata = {
+                            "Utility": f"RangePlotter {__version__}",
+                            "Command": "detection-range",
+                            "Date": datetime.datetime.now().isoformat(),
+                            "Target Altitude": f"{alt} m ({ref if ref else 'msl'})",
+                            "Detection Range": f"{rng} km",
+                            "Mode": "Union" if is_union else "Single",
+                            "Sensor Count": len(task_items),
+                            "Sensors": ", ".join([item['name'] for item in task_items]),
+                            "Variant": f"{v_idx+1}/{max_variants}" if max_variants > 1 else "1/1"
+                        }
+                        
+                        # If single sensor, add detailed sensor info
+                        if len(task_items) == 1:
+                            item = task_items[0]
+                            # item['sensor'] is (lon, lat)
+                            # We don't have ground elevation or AGL height easily available here unless we parsed it or looked it up.
+                            # parsed_data has 'sensor_height' if extracted from filename.
+                            # But ground elevation is not in the KML usually.
+                            # However, we can include what we have.
+                            metadata.update({
+                                "Sensor Name": item['name'],
+                                "Sensor Location": f"{item['sensor'][1]:.5f}, {item['sensor'][0]:.5f}",
+                            })
+                            if item.get('sensor_height') is not None:
+                                metadata["Sensor Height (AGL)"] = f"{item['sensor_height']} m"
+                            # Ground elevation is tricky as we don't have the RadarSite object here, just parsed KML data.
+                            # Unless we re-instantiate RadarSite or pass it through.
+                            # But detection-range works on KML inputs which might not have that info.
+                            # So we skip Ground Elevation for detection-range unless we want to fetch it (which is slow).
+                            # The user requirement: "metadata should contain ... unless it is a union".
+                            # If we can't get it, we can't put it.
+                            pass
+
                         export_viewshed_kml(
                             viewshed_polygon=task_poly,
                             output_path=specific_out_dir / filename,
@@ -1091,7 +1157,8 @@ def detection_range(
                             sensors=sensors_list,
                             document_name=kml_doc_name,
                             altitude_mode=ref if ref else "msl",
-                            kml_export_mode=settings.kml_export_altitude_mode
+                            kml_export_mode=settings.kml_export_altitude_mode,
+                            metadata=metadata
                         )
                         
                         created_files.append({

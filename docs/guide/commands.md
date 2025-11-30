@@ -48,6 +48,8 @@ rangeplotter viewshed [OPTIONS]
 
 **Output:**
 Generates one KML file per sensor per target altitude (e.g., `01_rangeplotter-SiteA-tgt_alt_100m_AGL.kml`).
+*   Files include embedded metadata (Sensor Height, Ground Elevation, etc.) accessible via popups.
+*   Side-pane text is suppressed for cleaner navigation.
 
 ---
 

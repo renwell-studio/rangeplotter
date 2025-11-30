@@ -11,6 +11,32 @@ KML_FOOTER = "</Document></kml>"
 
 GEOD = Geod(ellps="WGS84")
 
+def _format_metadata_html(metadata: Dict[str, Any]) -> str:
+    """Generate an HTML table for KML description."""
+    if not metadata:
+        return ""
+    
+    rows = []
+    for key, value in metadata.items():
+        rows.append(f"<tr><td><b>{escape(str(key))}</b></td><td>{escape(str(value))}</td></tr>")
+    
+    return f"""
+    <table border="1" style="border-collapse: collapse; width: 100%;">
+        {''.join(rows)}
+    </table>
+    """
+
+def _format_extended_data(metadata: Dict[str, Any]) -> str:
+    """Generate KML ExtendedData tags."""
+    if not metadata:
+        return ""
+    
+    data_tags = []
+    for key, value in metadata.items():
+        data_tags.append(f'<Data name="{escape(str(key))}"><value>{escape(str(value))}</value></Data>')
+    
+    return f"<ExtendedData>{''.join(data_tags)}</ExtendedData>"
+
 def _coords_to_kml_str(coords, altitude: float = 0.0) -> str:
     """Convert list of (lon, lat) or (lon, lat, z) to KML coordinate string."""
     return " ".join(f"{c[0]},{c[1]},{altitude}" for c in coords)
@@ -34,7 +60,8 @@ def export_viewshed_kml(
     sensors: Optional[List[Dict[str, Any]]] = None,
     document_name: Optional[str] = None,
     altitude_mode: str = "msl",
-    kml_export_mode: str = "clamped"
+    kml_export_mode: str = "clamped",
+    metadata: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Export a viewshed to a self-contained KML file with sensor location(s) and polygon.
@@ -49,6 +76,10 @@ def export_viewshed_kml(
     if document_name is None:
         document_name = "Viewshed Output"
     
+    # Prepare metadata strings
+    metadata_html = _format_metadata_html(metadata) if metadata else ""
+    extended_data = _format_extended_data(metadata) if metadata else ""
+
     # Polygon style
     line_color = style_config.get("line_color", "#FFA500")
     line_width = style_config.get("line_width", 2)
@@ -68,7 +99,11 @@ def export_viewshed_kml(
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
         f'    <name>{escape(document_name)}</name>',
+        '    <Snippet maxLines="0"></Snippet>',
     ]
+
+    # if metadata_html:
+    #    kml_content.append(f'    <description><![CDATA[{metadata_html}]]></description>')
     
     # Generate styles for each sensor
     # To avoid duplicate IDs, we can use a hash or index.
@@ -160,9 +195,17 @@ def export_viewshed_kml(
     kml_content.extend([
         '      <Placemark>',
         f'        <name>{escape(poly_name)}</name>',
+        '        <Snippet maxLines="0"></Snippet>',
         '        <styleUrl>#polyStyle</styleUrl>',
-        '        <MultiGeometry>'
     ])
+
+    if metadata_html:
+        kml_content.append(f'        <description><![CDATA[{metadata_html}]]></description>')
+
+    if extended_data:
+        kml_content.append(f'        {extended_data}')
+
+    kml_content.append('        <MultiGeometry>')
 
     polys = []
     if isinstance(viewshed_polygon, Polygon):
@@ -325,9 +368,10 @@ def kml_ring_placemark(name: str, coords: List[str], line_color_hex: str, line_w
         f"<Polygon><outerBoundaryIs><LinearRing><coordinates>{coord_str}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>"
     )
 
-def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], radars_meta: Dict[str, Tuple[float, float]], style: Dict, kml_export_mode: str = "clamped"):
+def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], radars_meta: Dict[str, Dict[str, Any]], style: Dict, kml_export_mode: str = "clamped", metadata: Optional[Dict[str, Any]] = None):
     """
     Export horizon rings to a KML file with shared styles and folder structure.
+    radars_meta: Dict[radar_name, Dict[str, Any]] containing 'lat', 'lon', 'ground_elev', 'height_agl', etc.
     """
     line_color = style.get("line_color", "#FFA500")
     line_width = style.get("line_width", 2)
@@ -342,11 +386,22 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
         fill_val = "1"
         fill_kml = to_kml_color(fill_color, fill_opacity)
 
+    # Prepare global metadata strings (System info, etc.)
+    global_metadata_html = _format_metadata_html(metadata) if metadata else ""
+    # We don't put extended data on the Document, usually on Placemarks.
+
     kml_content = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
         '    <name>Geometric Horizons</name>',
+        '    <Snippet maxLines="0"></Snippet>',
+    ]
+
+    # if global_metadata_html:
+    #    kml_content.append(f'    <description><![CDATA[{global_metadata_html}]]></description>')
+
+    kml_content.extend([
         '    <Style id="sensorStyle">',
         '      <IconStyle>',
         '        <scale>1.0</scale>',
@@ -363,10 +418,12 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
         f'        <fill>{fill_val}</fill>',
         '      </PolyStyle>',
         '    </Style>'
-    ]
+    ])
 
     for radar_name, entries in rings.items():
-        lon, lat = radars_meta[radar_name]
+        meta_data = radars_meta.get(radar_name, {})
+        lon = meta_data.get('lon', 0.0)
+        lat = meta_data.get('lat', 0.0)
         
         kml_content.append('    <Folder>')
         kml_content.append(f'      <name>{escape(radar_name)}</name>')
@@ -375,6 +432,7 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
         kml_content.extend([
             '      <Placemark>',
             f'        <name>{escape(radar_name)}</name>',
+            '        <Snippet maxLines="0"></Snippet>',
             '        <styleUrl>#sensorStyle</styleUrl>',
             '        <Point>',
             f'          <coordinates>{lon},{lat},0</coordinates>',
@@ -396,10 +454,35 @@ def export_horizons_kml(path: str, rings: Dict[str, List[Tuple[float, float]]], 
             
             alt_label = f"{int(alt)}" if alt.is_integer() else f"{alt}"
             
+            # Construct per-ring metadata
+            # Merge global metadata with sensor specific metadata
+            ring_meta = metadata.copy() if metadata else {}
+            ring_meta.update({
+                "Sensor Name": radar_name,
+                "Sensor Location": f"{lat:.5f}, {lon:.5f}",
+                "Sensor Ground Elevation": f"{meta_data.get('ground_elev', 0.0):.1f} m MSL",
+                "Sensor Height (AGL)": f"{meta_data.get('height_agl', 0.0)} m",
+                "Target Altitude": f"{alt_label} m",
+                "Max Range": f"{dist_m/1000:.1f} km"
+            })
+            
+            ring_html = _format_metadata_html(ring_meta)
+            ring_extended = _format_extended_data(ring_meta)
+
             kml_content.extend([
                 '      <Placemark>',
                 f'        <name>Horizon ({alt_label}m target altitude)</name>',
+                '        <Snippet maxLines="0"></Snippet>',
                 '        <styleUrl>#horizonStyle</styleUrl>',
+            ])
+            
+            if ring_html:
+                kml_content.append(f'        <description><![CDATA[{ring_html}]]></description>')
+            
+            if ring_extended:
+                kml_content.append(f'        {ring_extended}')
+
+            kml_content.extend([
                 '        <Polygon>',
                 f'          {altitude_mode_tag}',
                 '          <outerBoundaryIs><LinearRing><coordinates>',
@@ -422,7 +505,8 @@ def export_combined_kml(
     radars_data: List[dict],
     styles: List[str],
     style_config: dict,
-    document_name: str = "Viewshed Analysis"
+    document_name: str = "Viewshed Analysis",
+    metadata: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Export multiple radars and their viewsheds to a single KML file.
@@ -441,12 +525,20 @@ def export_combined_kml(
         fill_val = "1"
         fill_kml = to_kml_color(fill_color, fill_opacity)
 
+    # Prepare metadata strings
+    metadata_html = _format_metadata_html(metadata) if metadata else ""
+    extended_data = _format_extended_data(metadata) if metadata else ""
+
     kml_content = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{escape(document_name)}</name>'
+        f'    <name>{escape(document_name)}</name>',
+        '    <Snippet maxLines="0"></Snippet>',
     ]
+
+    # if metadata_html:
+    #    kml_content.append(f'    <description><![CDATA[{metadata_html}]]></description>')
     
     # Add extracted styles
     for style_xml in styles:
@@ -505,6 +597,10 @@ def export_combined_kml(
             kml_content.append(f'{indent}<Placemark>')
             kml_content.append(f'{indent}  <name>viewshed ({alt}m target altitude)</name>')
             kml_content.append(f'{indent}  <styleUrl>#defaultPolyStyle</styleUrl>')
+            
+            if extended_data:
+                kml_content.append(f'{indent}  {extended_data}')
+
             kml_content.append(f'{indent}  <MultiGeometry>')
             
             polys = []

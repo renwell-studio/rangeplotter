@@ -41,6 +41,15 @@ This command also supports an **Interactive Wizard** mode to guide you through t
     *   High-altitude aircraft.
     *   *Result*: The target may crash into terrain if the ground elevation exceeds the target altitude.
 
+## Enhanced Metadata & KML Styling
+RangePlotter generates KML files optimized for professional use in Google Earth.
+*   **Clean Navigation**: The "Places" side pane in Google Earth is kept clean. Metadata text is suppressed in the list view to prevent clutter when working with many sensors.
+*   **Rich Information**: Clicking on any sensor or viewshed polygon opens a detailed popup containing:
+    *   **Sensor Details**: Name, Location, Ground Elevation (MSL), Height (AGL).
+    *   **Run Parameters**: Date, Command, Target Altitude, Max Range.
+    *   **Physics Models**: Earth Radius Model, Refraction Factor.
+*   **Machine Readable**: All metadata is also stored in KML `<ExtendedData>` tags, allowing for programmatic parsing by other tools.
+
 ## Multiscale Processing
 RangePlotter employs a "multiscale" approach to balance speed and accuracy.
 *   **Near Field (< 20km)**: Uses full 30m resolution DEM data. Critical for accurate local horizon masking.

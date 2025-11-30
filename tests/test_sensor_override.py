@@ -58,9 +58,9 @@ def test_sensor_altitude_override(tmp_path):
     assert r2.radar_height_m_msl == 110.0
 
     # 3. Absolute Radar (absolute, 100m)
-    # Should use default height (10m) added to absolute position.
+    # Should use 0m height (assume KML point is the sensor).
     r3 = next(r for r in radars if r.name == "Absolute Radar")
-    assert r3.sensor_height_m_agl == default_height
+    assert r3.sensor_height_m_agl == 0.0
     r3.ground_elevation_m_msl = 50.0 
-    # absolute: (input_altitude) + sensor_height = 100 + 10 = 110
-    assert r3.radar_height_m_msl == 110.0
+    # absolute: (input_altitude) + sensor_height = 100 + 0 = 100
+    assert r3.radar_height_m_msl == 100.0

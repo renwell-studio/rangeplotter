@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Optional Union**: Added `--union` / `--no-union` flag to `detection-range` and `network run` commands. Users can now choose to output individual coverage maps for each sensor instead of a single unioned file. The default behavior remains `union=True`.
 - **Configurable Union**: Added `union_outputs` setting to `config.yaml` to control the default union behavior.
+- **Enhanced Metadata**: KML outputs now include detailed metadata (Sensor Height, Ground Elevation, Refraction, etc.) in both HTML popups and machine-readable `<ExtendedData>`.
+- **Clean KML Navigation**: Added `<Snippet maxLines="0">` to KML outputs to suppress text in the Google Earth "Places" pane, reducing visual clutter.
 
 ### Fixed
 - **Network Input Resolution**: Fixed issue where `network run` would fail to find input files if they were not in the current directory (now checks `working_files/sensor_locations` as a fallback, matching `viewshed` behavior).
+- **KML Display**: Removed duplicate metadata tables that were appearing at the Document level in Google Earth.
 
 ### Changed
 - **CLI Verbosity**: Standardized verbosity flags across all commands. `network run` now correctly passes `-v` (INFO) and `-vv` (DEBUG) to subprocesses, and only displays raw command strings at the DEBUG level.
