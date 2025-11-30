@@ -11,9 +11,17 @@ Recommended for most Linux users. No Python environment is required.
 2.  **Unzip** the archive.
 3.  **Run the installer**:
     ```bash
-    ./install_or_upgrade.sh
+    ./install.sh
     ```
-    This script will set up the application and preserve any existing configuration if you are upgrading.
+    This script will:
+    *   Install the application to `~/rangeplotter` (default).
+    *   Auto-configure performance settings for your hardware.
+    *   Preserve your existing configuration and data if upgrading.
+    *   **Note**: It is always recommended to backup your important files before upgrading (e.g. copy `config.yaml` to `config.yaml.backup`). Key resources are:
+        *   `config.yaml`
+        *   `.env`
+        *   `working_files/`
+        *   `data_cache/`
 
 ### Option 2: Python Wheel (Cross-Platform)
 For users with Python installed (Windows, macOS, Linux).

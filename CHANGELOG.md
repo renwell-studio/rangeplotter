@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.6] - Unreleased
 ### Added
+- **Installation Script**: Replaced `install_or_upgrade.sh` with a robust `install.sh`. The new script features:
+    - **Auto-Configuration**: Automatically detects CPU cores and optimizes `max_workers` in `config.yaml` for the host machine.
+    - **Safe Upgrades**: Intelligently updates `config.yaml` with new settings while preserving user customizations.
+    - **Error Handling**: Fixed shell compatibility issues ("Bad substitution") for wider Linux support.
 - **Robust Smart Resume**: Replaced external state files with embedded cryptographic hashes in KML `<ExtendedData>`. This ensures that output files are self-verifying and portable.
 - **Session Management**: The `network run` command now tracks the last active session in `working_files/last_session.json`, allowing for one-click resumption of interrupted batch jobs.
 - **Optional Union**: Added `--union` / `--no-union` flag to `detection-range` and `network run` commands. Users can now choose to output individual coverage maps for each sensor instead of a single unioned file. The default behavior remains `union=True`.
