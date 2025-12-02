@@ -431,3 +431,168 @@ Consider adding a `--no-cache` flag to the `viewshed` CLI command for debugging 
 | `src/rangeplotter/cli/network.py` | **No Change** | Inherits cache via subprocess call to `viewshed`. |
 | `src/rangeplotter/utils/state.py` | **Minor Update** | Extend `compute_hash()` to include styling parameters. |
 | `config/config.yaml` | **No Change** | Uses existing `cache_dir`. |
+
+---
+
+## User Acceptance Testing Checklist
+
+This checklist is designed for step-by-step execution by an AI coding assistant under developer supervision. All tests use a temporary directory (`tmp_test/`) within the project root for easy cleanup.
+
+### Prerequisites
+
+```bash
+# Create temporary test directory
+mkdir -p tmp_test/output tmp_test/cache
+
+# Create a simple test KML with a single radar site
+cat > tmp_test/test_radar.kml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Test Radar</name>
+    <Placemark>
+      <name>Brevoort Island LRR</name>
+      <Point>
+        <coordinates>-63.333333,63.333333,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>
+EOF
+```
+
+---
+
+### Test Suite A: ViewshedCache Unit Verification
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| A1 | Cache directory created | `ls -la tmp_test/cache/` | Directory exists (empty initially) |
+| A2 | Run viewshed (cache miss) | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 -o tmp_test/output --cache-dir tmp_test/cache -v` | Completes successfully, logs show "Cache MISS" |
+| A3 | Verify cache populated | `ls -la tmp_test/cache/viewsheds/` | One or more `.tif` files exist |
+| A4 | Inspect cached GeoTIFF | `gdalinfo tmp_test/cache/viewsheds/*.tif 2>/dev/null \| head -20` | Shows Float32 data type, LZW compression |
+
+---
+
+### Test Suite B: Cache Hit Performance
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| B1 | Run viewshed different altitude (cache hit) | `time rangeplotter viewshed -i tmp_test/test_radar.kml -a 500 -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep -E "(Cache HIT\|real)"` | Logs show "Cache HIT", faster than A2 |
+| B2 | Verify no new cache files | `ls -la tmp_test/cache/viewsheds/ \| wc -l` | Same count as after A3 |
+| B3 | Output KML exists for 500m | `ls tmp_test/output/*500*.kml` | File exists |
+
+---
+
+### Test Suite C: Cache Miss Scenarios
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| C1 | Different sensor height (cache miss) | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 --sensor-height 25 -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep "Cache"` | Logs show "Cache MISS" |
+| C2 | Verify new cache file created | `ls tmp_test/cache/viewsheds/*.tif \| wc -l` | Count increased by zone count |
+
+---
+
+### Test Suite D: StateManager Integration
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| D1 | Re-run identical command (StateManager hit) | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep -i "skip\|exist"` | Logs show "Already exists" or "Skipping" |
+| D2 | Change style, same physics (StateManager miss, ViewshedCache hit) | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 --fill-color "#FF0000" -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep -E "(Cache HIT\|Recalculating)"` | ViewshedCache HIT, but recalculates/exports KML |
+| D3 | Verify styled output has different hash | `grep -o 'state_hash">[^<]*' tmp_test/output/*100*.kml \| head -2` | Two different hash values |
+
+---
+
+### Test Suite E: Multiple Altitudes (detection-range simulation)
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| E1 | Clear output, keep cache | `rm -f tmp_test/output/*.kml` | Output cleared |
+| E2 | Run multiple altitudes | `time rangeplotter viewshed -i tmp_test/test_radar.kml -a 50,100,500,1000 -o tmp_test/output --cache-dir tmp_test/cache -v` | All complete, most are cache HITs |
+| E3 | Verify all outputs created | `ls tmp_test/output/*.kml \| wc -l` | 4 KML files |
+| E4 | Verify cache reuse | Count log lines with "Cache HIT" | At least 3 HITs (4 altitudes, 1 miss per zone on first) |
+
+---
+
+### Test Suite F: Multiscale Zone Caching
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| F1 | Clear cache | `rm -rf tmp_test/cache/viewsheds/*` | Cache cleared |
+| F2 | Run with multiscale enabled | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 1000 -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep "Zone"` | Multiple zones processed (Zone 1, Zone 2, etc.) |
+| F3 | Count cached zone files | `ls tmp_test/cache/viewsheds/*.tif \| wc -l` | Multiple files (one per zone) |
+
+---
+
+### Test Suite G: AGL vs MSL Mode
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| G1 | Run in AGL mode (default) | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 --altitude-mode agl -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep -i "agl\|mode"` | AGL mode used |
+| G2 | Run in MSL mode | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 500 --altitude-mode msl -o tmp_test/output --cache-dir tmp_test/cache -v 2>&1 \| grep -i "msl\|mode"` | MSL mode used, output differs |
+
+---
+
+### Test Suite H: Existing Functionality Regression
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| H1 | Horizons command still works | `rangeplotter horizons -i tmp_test/test_radar.kml -o tmp_test/output -v` | Completes successfully |
+| H2 | Range rings command still works | `rangeplotter range-rings -i tmp_test/test_radar.kml -o tmp_test/output -v` | Completes successfully |
+| H3 | Prepare-dem command still works | `rangeplotter prepare-dem -i tmp_test/test_radar.kml --cache-dir tmp_test/cache -v` | Completes, DEM tiles cached |
+
+---
+
+### Test Suite I: Cache Bypass Flag
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| I1 | Run with cache disabled | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 --no-cache -o tmp_test/output -v 2>&1 \| grep -i "cache"` | No cache HIT/MISS messages, or cache bypassed |
+| I2 | Verify no new cache files | `ls tmp_test/cache/viewsheds/*.tif 2>/dev/null \| wc -l` | Count unchanged from before I1 |
+
+*Note: Test I1-I2 only applicable if `--no-cache` flag was implemented. Skip if not available.*
+
+---
+
+### Test Suite J: Force Recalculation
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| J1 | Force recalculation | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 100 -o tmp_test/output --cache-dir tmp_test/cache --force -v 2>&1 \| grep -i "recalculating\|forced"` | Recalculates despite existing output |
+
+---
+
+### Test Suite K: Edge Cases
+
+| ID | Test | Command | Expected Result |
+|----|------|---------|-----------------|
+| K1 | Very low target altitude | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 1 -o tmp_test/output --cache-dir tmp_test/cache -v` | Completes (may have small/empty viewshed) |
+| K2 | Very high target altitude | `rangeplotter viewshed -i tmp_test/test_radar.kml -a 15000 -o tmp_test/output --cache-dir tmp_test/cache -v` | Completes with large viewshed |
+
+---
+
+### Cleanup
+
+```bash
+# Remove temporary test directory
+rm -rf tmp_test/
+```
+
+---
+
+### Test Execution Summary Template
+
+| Suite | Tests | Passed | Failed | Notes |
+|-------|-------|--------|--------|-------|
+| A: Cache Unit | 4 | | | |
+| B: Cache Hit | 3 | | | |
+| C: Cache Miss | 2 | | | |
+| D: StateManager | 3 | | | |
+| E: Multi-Altitude | 4 | | | |
+| F: Multiscale | 3 | | | |
+| G: AGL/MSL | 2 | | | |
+| H: Regression | 3 | | | |
+| I: Cache Bypass | 2 | | | |
+| J: Force Recalc | 1 | | | |
+| K: Edge Cases | 2 | | | |
+| **TOTAL** | **29** | | | |

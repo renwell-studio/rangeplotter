@@ -704,14 +704,22 @@ def viewshed(
             radar_h = sensor.radar_height_m_msl or 0.0
             horizon_m = mutual_horizon_distance(radar_h, alt, sensor.latitude, settings.atmospheric_k_factor)
 
-            # Compute hash - include sensor height!
+            # Determine styling early so it can be included in the hash
+            final_style = settings.style.model_dump()
+            if sensor.style_config:
+                final_style.update(sensor.style_config)
+
+            # Compute hash - include sensor height and styling!
             current_hash = state_manager.compute_hash(
                 sensor, 
                 alt, 
                 settings.atmospheric_k_factor,
                 earth_radius_model=settings.earth_model.type,
                 max_range=horizon_m,
-                sensor_height_m_agl=sensor_h
+                sensor_height_m_agl=sensor_h,
+                fill_color=final_style.get('fill_color'),
+                line_color=final_style.get('line_color'),
+                fill_opacity=final_style.get('fill_opacity')
             )
             # Note: compute_hash uses sensor.radar_height_m_msl, which uses sensor.sensor_height_m_agl
             # So modifying sensor.sensor_height_m_agl above correctly affects the hash.
@@ -771,10 +779,7 @@ def viewshed(
                 
                 out_path = out_dir_path / filename
                 
-                # Merge sensor style with default style
-                final_style = settings.style.model_dump()
-                if sensor.style_config:
-                    final_style.update(sensor.style_config)
+                # final_style was already computed before hash calculation
                 
                 metadata = {
                     "Utility": f"RangePlotter {__version__}",

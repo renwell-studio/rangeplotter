@@ -23,6 +23,7 @@ import pyproj
 
 from rangeplotter.models.radar_site import RadarSite
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
+from rangeplotter.io.viewshed_cache import ViewshedCache
 from rangeplotter.geo.earth import mutual_horizon_distance, effective_earth_radius
 
 log = logging.getLogger(__name__)
@@ -244,6 +245,247 @@ def _reproject_dem_to_aeqd(
 
     return dst_array[0], dst_transform
 
+
+def _compute_mva_polar(
+    dem_array: np.ndarray,
+    transform: rasterio.Affine,
+    radar_h_msl: float,
+    max_radius_m: float,
+    center_lat_deg: float,
+    k_factor: float = 1.333,
+    max_ram_percent: float = 80.0,
+    progress_callback: Optional[Callable[[str, float], None]] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute Minimum Visible Altitude (MVA) surface in polar coordinates.
+    
+    Returns a Float32 array where each cell contains the minimum altitude (AGL)
+    a target must be at to be visible from the sensor.
+    
+    Args:
+        dem_array: Elevation data in AEQD (meters).
+        transform: Affine transform of the DEM (AEQD).
+        radar_h_msl: Radar height (MSL).
+        max_radius_m: Maximum analysis radius.
+        center_lat_deg: Latitude of radar (for earth radius).
+        k_factor: Effective earth radius factor.
+        max_ram_percent: Maximum percentage of system RAM to use.
+        progress_callback: Optional callback(step: str, percentage: float) for progress updates.
+        
+    Returns:
+        Tuple of (mva_polar, r_values, az_values):
+            - mva_polar: Float32 array (n_az, n_r) of minimum visible altitude AGL
+            - r_values: 1D array of range values in meters
+            - az_values: 1D array of azimuth values in radians
+    """
+    # Constants
+    R_eff = effective_earth_radius(center_lat_deg, k_factor)
+    
+    log.debug(f"MVA Polar Sweep: Radar H={radar_h_msl:.2f}m, Max Radius={max_radius_m:.2f}m, R_eff={R_eff:.2f}m")
+
+    height, width = dem_array.shape
+    
+    # Check elevation at radar location
+    it = ~transform
+    center_col_float, center_row_float = it * (0, 0)
+    center_c = int(center_col_float)
+    center_r = int(center_row_float)
+    
+    if 0 <= center_c < width and 0 <= center_r < height:
+        center_elev = dem_array[center_r, center_c]
+        msg = f"Elevation at Radar Location (Grid Center): {center_elev:.2f}m. Radar H: {radar_h_msl:.2f}m. Delta: {radar_h_msl - center_elev:.2f}m"
+        if radar_h_msl < center_elev:
+            log.warning(msg)
+        else:
+            log.debug(msg)
+    else:
+        log.warning(f"Radar location is outside DEM grid! Center: ({center_c}, {center_r}), Shape: ({width}, {height})")
+
+    # 1. Setup Polar Grid
+    pixel_size = transform[0]
+    
+    n_r = int(np.ceil(max_radius_m / pixel_size))
+    r_values = np.linspace(0, max_radius_m, n_r)
+    
+    circumference = 2 * np.pi * max_radius_m
+    n_az = int(np.ceil(circumference / pixel_size))
+    n_az = min(n_az, 14400)
+    if n_az % 2 != 0:
+        n_az += 1
+        
+    log.debug(f"Polar Grid: {n_az} azimuths x {n_r} ranges. Est. memory per array: {n_az * n_r * 4 / 1024 / 1024:.1f} MB")
+        
+    az_values = np.linspace(0, 2*np.pi, n_az, endpoint=False)
+    
+    # Create output MVA array (Polar) - Float32 for altitude values
+    # Initialize with inf (meaning completely obscured)
+    mva_polar = np.full((n_az, n_r), np.inf, dtype=np.float32)
+    
+    # Dynamic chunk sizing
+    mem = psutil.virtual_memory()
+    total_mem = mem.total
+    available_mem = mem.available
+    target_limit = total_mem * (max_ram_percent / 100.0)
+    current_used = total_mem - available_mem
+    available_budget = max(0, target_limit - current_used - (1024 * 1024 * 1024))
+    target_chunk_bytes = available_budget * 0.8
+    
+    # Bytes per azimuth: n_r * 44 bytes (accounting for Float32 MVA output)
+    bytes_per_az = n_r * 44
+    az_chunk_size = max(1, int(target_chunk_bytes / bytes_per_az))
+    
+    log.debug(f"Available Budget: {available_budget/1024/1024:.1f} MB. Target chunk size: {target_chunk_bytes/1024/1024:.1f} MB.")
+    log.debug(f"Processing MVA sweep in chunks of {az_chunk_size} azimuths...")
+    
+    r_values_2d = r_values.reshape(1, n_r)
+    it = ~transform
+
+    for az_start in range(0, n_az, az_chunk_size):
+        az_end = min(az_start + az_chunk_size, n_az)
+        
+        az_chunk = az_values[az_start:az_end]
+        az_grid_chunk = az_chunk.reshape(-1, 1)
+        
+        x_grid = r_values_2d * np.sin(az_grid_chunk)
+        y_grid = r_values_2d * np.cos(az_grid_chunk)
+        
+        cols = (it.a * x_grid + it.b * y_grid + it.c).astype(int)
+        rows = (it.d * x_grid + it.e * y_grid + it.f).astype(int)
+        
+        np.clip(cols, 0, width - 1, out=cols)
+        np.clip(rows, 0, height - 1, out=rows)
+        
+        elevations = dem_array[rows, cols]
+        elevations_filled = np.nan_to_num(elevations, nan=0.0)
+        
+        r_safe = r_values_2d.copy()
+        r_safe[r_safe == 0] = 0.1
+        
+        # Compute terrain angle from radar
+        term1 = (elevations_filled - radar_h_msl) / r_safe
+        term2 = r_safe / (2 * R_eff)
+        
+        theta_terrain = term1 - term2
+        theta_terrain[:, 0] = -9999.0
+        
+        # Running max angle along each ray
+        M = np.maximum.accumulate(theta_terrain, axis=1)
+        
+        # Compute the required MSL altitude to clear the max angle M
+        # Using: theta = (h - h_radar) / r - r / (2 * R_eff)
+        # Solve for h: h_req = h_radar + r * (M + r / (2 * R_eff))
+        h_req_msl = radar_h_msl + r_safe * (M + term2)
+        
+        # MVA is the height Above Ground Level
+        mva_chunk = h_req_msl - elevations_filled
+        
+        # Clamp to 0 if ground is visible (h_req <= terrain means MVA = 0)
+        mva_chunk = np.maximum(mva_chunk, 0.0).astype(np.float32)
+        
+        # Store result
+        mva_polar[az_start:az_end, :] = mva_chunk
+        
+        del x_grid, y_grid, cols, rows, elevations, elevations_filled
+        del theta_terrain, M, h_req_msl, mva_chunk
+
+        if progress_callback:
+            progress_callback("Computing MVA", (az_end / n_az) * 100)
+    
+    # Stats for logging
+    finite_mva = mva_polar[np.isfinite(mva_polar)]
+    if finite_mva.size > 0:
+        log.debug(f"MVA Polar Stats: Min={finite_mva.min():.2f}m, Max={finite_mva.max():.2f}m, Mean={finite_mva.mean():.2f}m")
+    
+    return mva_polar, r_values, az_values
+
+
+def _polar_to_cartesian_mva(
+    mva_polar: np.ndarray,
+    r_values: np.ndarray,
+    az_values: np.ndarray,
+    dem_shape: Tuple[int, int],
+    transform: rasterio.Affine,
+    max_radius_m: float,
+    progress_callback: Optional[Callable[[str, float], None]] = None
+) -> np.ndarray:
+    """
+    Convert MVA from polar to Cartesian coordinates.
+    
+    Args:
+        mva_polar: Float32 array (n_az, n_r) of MVA values.
+        r_values: 1D array of range values in meters.
+        az_values: 1D array of azimuth values in radians.
+        dem_shape: Shape of the output cartesian grid (height, width).
+        transform: Affine transform for the cartesian grid.
+        max_radius_m: Maximum radius for valid data.
+        progress_callback: Optional callback for progress updates.
+        
+    Returns:
+        Float32 array (height, width) of MVA values in Cartesian coordinates.
+        Values outside max_radius_m are set to inf.
+    """
+    height, width = dem_shape
+    n_az = len(az_values)
+    n_r = len(r_values)
+    
+    # Create output - initialize with inf (outside range = not visible)
+    mva_cart = np.full((height, width), np.inf, dtype=np.float32)
+    
+    block_size = 2048
+    total_blocks = ((height + block_size - 1) // block_size) * ((width + block_size - 1) // block_size)
+    processed_blocks = 0
+    
+    for r_start in range(0, height, block_size):
+        for c_start in range(0, width, block_size):
+            r_end = min(r_start + block_size, height)
+            c_end = min(c_start + block_size, width)
+            
+            rows_block, cols_block = np.indices((r_end - r_start, c_end - c_start))
+            rows_block += r_start
+            cols_block += c_start
+            
+            x_map = transform.a * cols_block + transform.b * rows_block + transform.c
+            y_map = transform.d * cols_block + transform.e * rows_block + transform.f
+            
+            r_map = np.sqrt(x_map**2 + y_map**2)
+            az_map = np.arctan2(x_map, y_map)
+            az_map[az_map < 0] += 2 * np.pi
+            
+            r_idx = (r_map / (max_radius_m / (n_r - 1))).astype(int)
+            az_idx = (az_map / (2 * np.pi / n_az)).astype(int)
+            
+            np.clip(r_idx, 0, n_r - 1, out=r_idx)
+            np.clip(az_idx, 0, n_az - 1, out=az_idx)
+            
+            valid_mask = r_map <= max_radius_m
+            
+            # Extract MVA values for this block
+            block_mva = np.full_like(r_map, np.inf, dtype=np.float32)
+            block_mva[valid_mask] = mva_polar[az_idx[valid_mask], r_idx[valid_mask]]
+            
+            mva_cart[r_start:r_end, c_start:c_end] = block_mva
+            
+            processed_blocks += 1
+            if progress_callback:
+                progress_callback("Converting to Cartesian", (processed_blocks / total_blocks) * 100)
+    
+    return mva_cart
+
+
+def _threshold_mva_to_mask(mva: np.ndarray, target_alt_agl: float) -> np.ndarray:
+    """
+    Threshold an MVA surface to produce a binary visibility mask.
+    
+    Args:
+        mva: Float32 MVA array (Cartesian or Polar).
+        target_alt_agl: Target altitude Above Ground Level.
+        
+    Returns:
+        uint8 binary mask where 1 = visible (MVA <= target_alt).
+    """
+    return (mva <= target_alt_agl).astype(np.uint8)
+
+
 def _radial_sweep_visibility(
     dem_array: np.ndarray,
     transform: rasterio.Affine,
@@ -259,6 +501,9 @@ def _radial_sweep_visibility(
     """
     Perform radial sweep to determine visibility polygon.
     
+    This is a compatibility wrapper that uses the new MVA-based approach
+    internally but maintains the original function signature.
+    
     dem_array: Elevation data in AEQD (meters).
     transform: Affine transform of the DEM (AEQD).
     radar_h_msl: Radar height (MSL).
@@ -270,250 +515,110 @@ def _radial_sweep_visibility(
     progress_callback: Optional callback(step: str, percentage: float) for progress updates.
     altitude_mode: "msl" or "agl".
     """
+    log.debug(f"Radial Sweep: Radar H={radar_h_msl:.2f}m, Target H={target_h:.2f}m ({altitude_mode}), Max Radius={max_radius_m:.2f}m")
     
-    # Constants
-    # Calculate effective earth radius at this latitude
-    R_eff = effective_earth_radius(center_lat_deg, k_factor)
+    # 1. Compute MVA in polar coordinates
+    mva_polar, r_values, az_values = _compute_mva_polar(
+        dem_array=dem_array,
+        transform=transform,
+        radar_h_msl=radar_h_msl,
+        max_radius_m=max_radius_m,
+        center_lat_deg=center_lat_deg,
+        k_factor=k_factor,
+        max_ram_percent=max_ram_percent,
+        progress_callback=progress_callback
+    )
     
-    log.debug(f"Radial Sweep Inputs: Radar H={radar_h_msl:.2f}m, Target H={target_h:.2f}m ({altitude_mode}), Max Radius={max_radius_m:.2f}m, R_eff={R_eff:.2f}m")
-
-    height, width = dem_array.shape
+    # 2. Convert to Cartesian coordinates
+    mva_cart = _polar_to_cartesian_mva(
+        mva_polar=mva_polar,
+        r_values=r_values,
+        az_values=az_values,
+        dem_shape=dem_array.shape,
+        transform=transform,
+        max_radius_m=max_radius_m,
+        progress_callback=progress_callback
+    )
     
-    # Check elevation at radar location
-    # Use the inverse transform properly
-    it = ~transform
-    # Center (0,0) in AEQD maps to (col, row)
-    center_col_float, center_row_float = it * (0, 0)
-    center_c = int(center_col_float)
-    center_r = int(center_row_float)
+    # Free polar memory
+    del mva_polar
     
-    if 0 <= center_c < width and 0 <= center_r < height:
-        center_elev = dem_array[center_r, center_c]
-        msg = f"Elevation at Radar Location (Grid Center): {center_elev:.2f}m. Radar H: {radar_h_msl:.2f}m. Delta: {radar_h_msl - center_elev:.2f}m"
-        if radar_h_msl < center_elev:
-            log.warning(msg)
-        else:
-            log.info(msg)
+    # 3. Handle altitude mode conversion
+    # MVA is computed as AGL - the minimum altitude above ground for visibility
+    if altitude_mode == "agl":
+        # target_h is already AGL, use directly
+        target_alt_agl = target_h
     else:
-        log.warning(f"Radar location is outside DEM grid! Center: ({center_c}, {center_r}), Shape: ({width}, {height})")
+        # MSL mode: target_h is absolute MSL
+        # We need to compare against terrain + MVA
+        # For MSL mode, a point is visible if target_h >= terrain_elev + MVA
+        # Which means: MVA <= target_h - terrain_elev
+        # But we don't have terrain_elev in the Cartesian grid easily...
+        # 
+        # Alternative approach: For MSL mode, we need to sample terrain and adjust
+        # For now, we'll handle MSL by using the inverse:
+        # If target is at fixed MSL, visibility depends on terrain height too.
+        # This is complex - for backwards compatibility, let's handle it specially.
+        #
+        # Actually, for MSL mode, we need the terrain elevation at each point.
+        # The simplest approach: sample DEM at each point.
+        # But this is expensive. Better approach: 
+        # - For MSL, target_alt_agl = target_h - terrain_elev at each point
+        # This means we can't use a simple threshold; we need a per-pixel comparison.
+        #
+        # Let's do it properly with the DEM:
+        height, width = dem_array.shape
+        it = ~transform
+        
+        # Create meshgrid for terrain sampling
+        rows_idx, cols_idx = np.indices((height, width))
+        x_coords = transform.a * cols_idx + transform.b * rows_idx + transform.c
+        y_coords = transform.d * cols_idx + transform.e * rows_idx + transform.f
+        
+        # We already have dem_array which gives terrain elevation
+        terrain_elev = np.nan_to_num(dem_array, nan=0.0)
+        
+        # For MSL mode: visible if target_h >= terrain_elev + MVA
+        # Which means: target_h - terrain_elev >= MVA
+        target_h_above_ground = target_h - terrain_elev
+        
+        # Create mask: visible where MVA <= target_h_above_ground
+        # Also need to exclude underground targets (target_h < terrain)
+        mask = np.zeros((height, width), dtype=np.uint8)
+        visible = (mva_cart <= target_h_above_ground) & (target_h_above_ground >= 0)
+        mask[visible] = 1
+        
+        # Also exclude points outside range (mva_cart is inf there)
+        del mva_cart, terrain_elev, target_h_above_ground, visible
+        
+        # Skip to polygonization
+        return _polygonize_mask(mask, transform)
+    
+    # 4. Threshold MVA to binary visibility mask (AGL mode)
+    mask = _threshold_mva_to_mask(mva_cart, target_alt_agl)
+    del mva_cart
+    
+    # 5. Polygonize
+    return _polygonize_mask(mask, transform)
 
-    # 1. Setup Polar Grid
-    # We use a dense set of radials to ensure coverage
-    # Pixel size (approx)
+
+def _polygonize_mask(mask: np.ndarray, transform: rasterio.Affine) -> Polygon | MultiPolygon:
+    """
+    Convert a binary visibility mask to a polygon.
+    
+    Args:
+        mask: uint8 binary mask where 1 = visible.
+        transform: Affine transform for the mask.
+        
+    Returns:
+        Polygon or MultiPolygon representing the visible area.
+    """
     pixel_size = transform[0]
     
-    # Number of radial steps
-    n_r = int(np.ceil(max_radius_m / pixel_size))
-    r_values = np.linspace(0, max_radius_m, n_r)
-    
-    # Number of azimuth steps
-    # We want arc length at max range to be comparable to pixel size to avoid gaps
-    circumference = 2 * np.pi * max_radius_m
-    # Ensure we have at least 1 pixel resolution at the edge
-    n_az = int(np.ceil(circumference / pixel_size))
-    # Clamp to a reasonable maximum to prevent OOM on huge ranges, but 3600 is too low for 100km+
-    # 120km radius -> 750km circ -> 30m pixel -> 25000 steps.
-    n_az = min(n_az, 14400) 
-    # Ensure even number for symmetry
-    if n_az % 2 != 0:
-        n_az += 1
-        
-    log.debug(f"Polar Grid: {n_az} azimuths x {n_r} ranges. Est. memory per array: {n_az * n_r * 4 / 1024 / 1024:.1f} MB")
-        
-    az_values = np.linspace(0, 2*np.pi, n_az, endpoint=False)
-    
-    # Create output visibility mask (Polar)
-    # We use bool to save memory (1 byte per pixel vs 4 bytes for float)
-    visible_polar = np.zeros((n_az, n_r), dtype=bool)
-    
-    # Chunk processing for Azimuths to save memory
-    # Target ~512MB per chunk for intermediate arrays
-    # Each azimuth column has n_r elements.
-    # We have approx 10 intermediate arrays (r_grid, x, y, cols, rows, elev, theta, M, etc.)
-    # Bytes per azimuth = n_r * 4 bytes * 10 arrays = n_r * 40 bytes
-    
-    # Dynamic chunk sizing
-    mem = psutil.virtual_memory()
-    total_mem = mem.total
-    available_mem = mem.available
-    
-    # Calculate budget based on max_ram_percent
-    # We want to use up to max_ram_percent of TOTAL memory for the process
-    # But we need to account for what's already used (including dem_array if it's in RAM)
-    
-    # Target usage limit
-    target_limit = total_mem * (max_ram_percent / 100.0)
-    
-    current_used = total_mem - available_mem
-    
-    # Available budget for chunks
-    # We leave a 1GB buffer
-    available_budget = max(0, target_limit - current_used - (1024 * 1024 * 1024))
-    
-    # Use up to 80% of the AVAILABLE budget for the active chunk
-    target_chunk_bytes = available_budget * 0.8
-    
-    # Bytes per azimuth = n_r * 40
-    bytes_per_az = n_r * 40
-    az_chunk_size = max(1, int(target_chunk_bytes / bytes_per_az))
-    
-    log.debug(f"Available Budget: {available_budget/1024/1024:.1f} MB. Target chunk size: {target_chunk_bytes/1024/1024:.1f} MB.")
-    log.debug(f"Processing radial sweep in chunks of {az_chunk_size} azimuths...")
-    
-    # Pre-calculate r_values grid (1D) as it is constant for all chunks
-    # But we need 2D for broadcasting, so we'll make it (1, n_r) and broadcast
-    r_values_2d = r_values.reshape(1, n_r)
-    
-    # Inverse transform
-    it = ~transform
-
-    for az_start in range(0, n_az, az_chunk_size):
-        az_end = min(az_start + az_chunk_size, n_az)
-        
-        # 1. Setup Grid for this chunk
-        az_chunk = az_values[az_start:az_end]
-        az_grid_chunk = az_chunk.reshape(-1, 1) # (chunk, 1)
-        
-        # Broadcast to (chunk, n_r)
-        # x = r * sin(az)
-        x_grid = r_values_2d * np.sin(az_grid_chunk)
-        y_grid = r_values_2d * np.cos(az_grid_chunk)
-        
-        # Map to pixel coordinates
-        cols = (it.a * x_grid + it.b * y_grid + it.c).astype(int)
-        rows = (it.d * x_grid + it.e * y_grid + it.f).astype(int)
-        
-        # Clip to bounds
-        np.clip(cols, 0, width - 1, out=cols)
-        np.clip(rows, 0, height - 1, out=rows)
-        
-        # Sample elevations
-        elevations = dem_array[rows, cols]
-        
-        # Handle missing data
-        elevations_filled = np.nan_to_num(elevations, nan=0.0)
-        
-        # 2. Compute Visibility
-        r_safe = r_values_2d.copy()
-        r_safe[r_safe == 0] = 0.1
-        
-        # Term 1
-        term1 = (elevations_filled - radar_h_msl) / r_safe
-        # Term 2
-        term2 = r_safe / (2 * R_eff)
-        
-        theta_terrain = term1 - term2
-        theta_terrain[:, 0] = -9999.0
-        
-        # Running max
-        M = np.maximum.accumulate(theta_terrain, axis=1)
-        
-        # Target angle
-        if altitude_mode == "agl":
-            # Target is at terrain + target_h
-            # target_elev = elevations_filled + target_h
-            # target_term1 = (target_elev - radar_h_msl) / r_safe
-            #              = (elevations_filled + target_h - radar_h_msl) / r_safe
-            target_term1 = (elevations_filled + target_h - radar_h_msl) / r_safe
-        else:
-            # MSL mode (Legacy)
-            # target_h is absolute MSL
-            target_term1 = (target_h - radar_h_msl) / r_safe
-            
-        theta_target = target_term1 - term2
-        
-        # Visibility check
-        vis_chunk = theta_target >= M
-        
-        # Mask underground
-        if altitude_mode == "msl":
-            # Only relevant for MSL targets which might be below terrain
-            vis_chunk[target_h < elevations_filled] = False
-        # For AGL, target is always above terrain (assuming target_h >= 0)
-        
-        # Store result
-        visible_polar[az_start:az_end, :] = vis_chunk
-        
-        # Explicitly delete large intermediates
-        del x_grid, y_grid, cols, rows, elevations, elevations_filled, theta_terrain, M, theta_target, vis_chunk
-
-        if progress_callback:
-            progress_callback("Computing LOS", (az_end / n_az) * 100)
-    
-    # Check if we found ANY visible pixels
-    visible_count = np.count_nonzero(visible_polar)
-    total_pixels = visible_polar.size
-    log.debug(f"Polar Visibility Stats: {visible_count} / {total_pixels} pixels visible ({visible_count/total_pixels*100:.2f}%)")
-
-    # 3. Convert to Cartesian Mask (Chunked)
-    # We want to create a boolean mask in the DEM grid space.
-    # We iterate over blocks to save memory.
-    
-    # Create output mask
-    mask = np.zeros((height, width), dtype=np.uint8)
-    
-    block_size = 2048
-    total_blocks = ((height + block_size - 1) // block_size) * ((width + block_size - 1) // block_size)
-    processed_blocks = 0
-    
-    for r_start in range(0, height, block_size):
-        for c_start in range(0, width, block_size):
-            r_end = min(r_start + block_size, height)
-            c_end = min(c_start + block_size, width)
-            
-            # Create grid for this block
-            # Indices relative to the block
-            # But we need global indices to compute x, y
-            # np.indices returns (2, rows, cols)
-            # We can use broadcasting
-            
-            # Global row/col indices for this block
-            # shape: (block_h, block_w)
-            rows_block, cols_block = np.indices((r_end - r_start, c_end - c_start))
-            rows_block += r_start
-            cols_block += c_start
-            
-            # Convert pixel to x, y (AEQD)
-            # x = a * col + b * row + c
-            # y = d * col + e * row + f
-            x_map = transform.a * cols_block + transform.b * rows_block + transform.c
-            y_map = transform.d * cols_block + transform.e * rows_block + transform.f
-            
-            # Convert to Polar
-            r_map = np.sqrt(x_map**2 + y_map**2)
-            az_map = np.arctan2(x_map, y_map) # result in [-pi, pi]
-            az_map[az_map < 0] += 2 * np.pi # [0, 2pi]
-            
-            # Map to indices in our Polar grid
-            r_idx = (r_map / (max_radius_m / (n_r - 1))).astype(int)
-            az_idx = (az_map / (2 * np.pi / n_az)).astype(int)
-            
-            # Clip indices
-            np.clip(r_idx, 0, n_r - 1, out=r_idx)
-            np.clip(az_idx, 0, n_az - 1, out=az_idx)
-            
-            # Lookup visibility
-            valid_mask = r_map <= max_radius_m
-            
-            # Extract visibility for this block
-            block_mask = np.zeros_like(valid_mask, dtype=np.uint8)
-            block_mask[valid_mask] = visible_polar[az_idx[valid_mask], r_idx[valid_mask]]
-            
-            # Write to global mask
-            mask[r_start:r_end, c_start:c_end] = block_mask
-            
-            processed_blocks += 1
-            if progress_callback:
-                progress_callback("Generating Mask", (processed_blocks / total_blocks) * 100)
-    
-    # 4. Polygonize
-    if progress_callback:
-        progress_callback("Vectorizing", 0)
     import rasterio.features
     from shapely.geometry import shape
+    from shapely.ops import unary_union
     
-    # shapes returns generator of (geojson_geometry, value)
-    # We want value=1
     shapes = rasterio.features.shapes(mask, transform=transform)
     
     polygons = []
@@ -524,11 +629,7 @@ def _radial_sweep_visibility(
     if not polygons:
         return Polygon()
         
-    # Union all polygons
-    from shapely.ops import unary_union
     merged = unary_union(polygons)
-    
-    # Simplify
     simplified = merged.simplify(tolerance=pixel_size, preserve_topology=True)
     
     if isinstance(simplified, (Polygon, MultiPolygon)):
@@ -542,56 +643,48 @@ def compute_viewshed(
     config: dict,
     progress_callback: Optional[Callable[[str, float], None]] = None,
     rich_progress: Optional[Any] = None,
-    altitude_mode: str = "msl"
+    altitude_mode: str = "msl",
+    use_cache: bool = True
 ) -> Polygon | MultiPolygon:
+    """
+    Compute a viewshed polygon for a radar site.
+    
+    This function uses a Minimum Visible Altitude (MVA) approach with per-zone
+    caching to enable efficient recomputation for different target altitudes.
+    
+    Args:
+        radar: The radar site to compute the viewshed for.
+        target_alt: Target altitude (MSL or AGL depending on altitude_mode).
+        dem_client: DEM client for fetching terrain data.
+        config: Configuration dictionary.
+        progress_callback: Optional callback for progress updates.
+        rich_progress: Optional rich progress bar.
+        altitude_mode: "msl" or "agl".
+        use_cache: Whether to use the MVA cache (default True).
+        
+    Returns:
+        Polygon or MultiPolygon representing the visible area in WGS84.
+    """
     
     # 1. Calculate max geometric range
-    # We use the geometric horizon as a hard limit to fetch data.
-    # d_max = mutual_horizon_distance(radar_h, target_h)
     radar_h = radar.radar_height_m_msl
     if radar_h is None:
-        # Should have been set by prepare-dem or similar.
-        # If not, we can't proceed accurately.
-        # For now, assume 0 if None? Or raise error.
-        radar_h = 0.0 # Fallback
+        radar_h = 0.0  # Fallback
         
-    # For horizon calculation, if AGL, we need to estimate.
-    # Worst case for horizon is usually high terrain, but for download bounds,
-    # we can assume target_alt is effectively MSL for the purpose of "max possible range"
-    # or add a buffer. If target is 10m AGL, it could be on a 2000m mountain.
-    # However, mutual_horizon_distance takes MSL altitudes.
-    # If mode is AGL, we don't know the max MSL without scanning terrain.
-    # Strategy: Use a generous buffer or assume a "reasonable max terrain height" + target_alt.
-    # Better strategy: Use the max_target_alt logic from main.py which already does this?
-    # Actually, main.py calls mutual_horizon_distance with max(altitudes).
-    # If altitudes are AGL, main.py might be underestimating if it treats them as MSL.
-    # But let's stick to the passed target_alt for now.
-    
-    # If AGL, we treat target_alt as if it were MSL for the initial "how far to look" check,
-    # but maybe add a buffer for terrain height?
-    # Standard radar horizon formula: d ~= 4.12 * (sqrt(h1) + sqrt(h2))
-    # If h2 is AGL, the actual h2_msl = h_terrain + h_agl.
-    # If we don't know h_terrain, we can't know exact horizon.
-    # But we download based on main.py's logic which uses max_target_alt.
-    # Let's assume the caller (main.py) has handled the download bounds correctly.
-    
     d_max = mutual_horizon_distance(radar_h, target_alt, radar.latitude, k=config.get("atmospheric_k_factor", 1.333))
-    
-    # Add a buffer?
-    d_max *= 1.05
+    d_max *= 1.05  # 5% buffer
     
     log.debug(f"Computing viewshed for {radar.name} @ {target_alt}m ({altitude_mode.upper()}). Max range: {d_max/1000:.1f} km")
     
-    # 2. Get DEM
+    # 2. Get DEM tiles (needed for cache miss path)
     if progress_callback:
         progress_callback("Downloading DEM", 0)
     bbox = approximate_bounding_box(radar.longitude, radar.latitude, d_max)
     dem_paths = dem_client.ensure_tiles(bbox, progress=rich_progress)
     
-    # 3. Reproject
-    log.debug("Reprojecting DEM to AEQD...")
-    if progress_callback:
-        progress_callback("Reprojecting DEM", 0)
+    # 3. Setup cache
+    cache_dir = Path(config.get("cache_dir", "data_cache"))
+    cache = ViewshedCache(cache_dir) if use_cache else None
     
     # Extract resource config
     res_cfg = config.get("resources", {})
@@ -604,12 +697,8 @@ def compute_viewshed(
     polygons_aeqd = []
     
     if not ms_config.get('enable', True):
-        # Legacy single-pass mode (force high res or use simple logic)
-        # For now, just treat as one big zone with near_res
         zones = [(0.0, d_max, ms_config.get('res_near_m', 30.0))]
     else:
-        # Define zones: (min_r, max_r, res)
-        # We ensure we cover up to d_max
         near_m = ms_config.get('near_m', 50000)
         mid_m = ms_config.get('mid_m', 200000)
         far_m = ms_config.get('far_m', 800000)
@@ -618,20 +707,26 @@ def compute_viewshed(
         res_mid = ms_config.get('res_mid_m', 120.0)
         res_far = ms_config.get('res_far_m', 1000.0)
         
-        zones = []
-        # Zone 1: 0 -> near
-        zones.append((0.0, near_m, res_near))
-        # Zone 2: near -> mid
-        zones.append((near_m, mid_m, res_mid))
-        # Zone 3: mid -> far (or d_max)
-        zones.append((mid_m, max(far_m, d_max), res_far))
+        zones = [
+            (0.0, near_m, res_near),
+            (near_m, mid_m, res_mid),
+            (mid_m, max(far_m, d_max), res_far)
+        ]
+
+    # Get ground elevation for cache key
+    ground_elev = radar.ground_elevation_m_msl if radar.ground_elevation_m_msl is not None else 0.0
+    sensor_h_agl = radar.sensor_height_m_agl if radar.sensor_height_m_agl is not None else radar_h - ground_elev
+    
+    # Earth model for cache key
+    earth_model_cfg = config.get("earth_model", {})
+    earth_model = earth_model_cfg.get("ellipsoid", "WGS84")
+    k_factor = config.get("atmospheric_k_factor", 1.333)
 
     # Process each zone
     for i, (z_min, z_max, z_res) in enumerate(zones):
         if d_max <= z_min:
             continue
             
-        # Effective max radius for this pass
         pass_max_r = min(d_max, z_max)
         
         log.info(f"Processing Zone {i+1}: {z_min/1000:.1f}-{pass_max_r/1000:.1f} km @ {z_res}m resolution")
@@ -639,36 +734,117 @@ def compute_viewshed(
         if progress_callback:
             progress_callback(f"Zone {i+1} ({z_res}m)", 0)
 
-        t0 = time.perf_counter()
-        dem_array, transform = _reproject_dem_to_aeqd(
-            dem_paths, 
-            radar.longitude, 
-            radar.latitude, 
-            pass_max_r,
-            target_resolution=z_res,
-            use_disk_swap=use_disk_swap,
-            max_ram_percent=max_ram_percent
-        )
-        t1 = time.perf_counter()
-        log.debug(f"Zone {i+1} Reprojection took {t1-t0:.2f}s. Grid: {dem_array.shape}")
-        log.debug(f"DEM Stats: Min={np.nanmin(dem_array):.2f}, Max={np.nanmax(dem_array):.2f}, Mean={np.nanmean(dem_array):.2f}")
+        # Try cache lookup
+        mva_cart = None
+        dem_array = None
+        transform = None
+        cache_hit = False
         
-        # Run Radial Sweep
-        t_sweep_start = time.perf_counter()
-        poly = _radial_sweep_visibility(
-            dem_array, 
-            transform, 
-            radar_h, 
-            target_alt, 
-            pass_max_r, 
-            radar.latitude,
-            config.get("atmospheric_k_factor", 1.333),
-            max_ram_percent=max_ram_percent,
-            progress_callback=None, # Don't spam progress for sub-steps
-            altitude_mode=altitude_mode
-        )
-        t_sweep_end = time.perf_counter()
-        log.debug(f"Zone {i+1} Sweep took {t_sweep_end - t_sweep_start:.2f}s")
+        if cache is not None:
+            zone_hash = cache.compute_hash(
+                lat=radar.latitude,
+                lon=radar.longitude,
+                ground_elev=ground_elev,
+                sensor_h_agl=sensor_h_agl,
+                z_min=z_min,
+                z_max=pass_max_r,
+                z_res=z_res,
+                k_factor=k_factor,
+                earth_model=earth_model
+            )
+            
+            cached = cache.get(zone_hash)
+            if cached is not None:
+                mva_cart, transform, _ = cached
+                cache_hit = True
+                log.info(f"Zone {i+1}: Cache HIT ({zone_hash[:8]}...)")
+        
+        if not cache_hit:
+            # Cache miss - compute MVA
+            log.info(f"Zone {i+1}: Cache MISS. Computing MVA...")
+            
+            t0 = time.perf_counter()
+            dem_array, transform = _reproject_dem_to_aeqd(
+                dem_paths, 
+                radar.longitude, 
+                radar.latitude, 
+                pass_max_r,
+                target_resolution=z_res,
+                use_disk_swap=use_disk_swap,
+                max_ram_percent=max_ram_percent
+            )
+            t1 = time.perf_counter()
+            log.debug(f"Zone {i+1} Reprojection took {t1-t0:.2f}s. Grid: {dem_array.shape}")
+            
+            # Compute MVA in polar coordinates
+            t_sweep_start = time.perf_counter()
+            mva_polar, r_values, az_values = _compute_mva_polar(
+                dem_array=dem_array,
+                transform=transform,
+                radar_h_msl=radar_h,
+                max_radius_m=pass_max_r,
+                center_lat_deg=radar.latitude,
+                k_factor=k_factor,
+                max_ram_percent=max_ram_percent,
+                progress_callback=None
+            )
+            
+            # Convert to Cartesian
+            mva_cart = _polar_to_cartesian_mva(
+                mva_polar=mva_polar,
+                r_values=r_values,
+                az_values=az_values,
+                dem_shape=dem_array.shape,
+                transform=transform,
+                max_radius_m=pass_max_r,
+                progress_callback=None
+            )
+            t_sweep_end = time.perf_counter()
+            log.debug(f"Zone {i+1} MVA computation took {t_sweep_end - t_sweep_start:.2f}s")
+            
+            del mva_polar, r_values, az_values
+            
+            # Cache the result
+            if cache is not None:
+                aeqd_crs = f"+proj=aeqd +lat_0={radar.latitude} +lon_0={radar.longitude} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+                cache.put(zone_hash, mva_cart, transform, aeqd_crs)
+        
+        # Threshold MVA to get binary visibility mask
+        if altitude_mode == "agl":
+            # For AGL mode, target_alt is already in AGL - direct threshold
+            mask = _threshold_mva_to_mask(mva_cart, target_alt)
+        else:
+            # For MSL mode, we need terrain elevation to compute target height AGL
+            # If we have dem_array from cache miss path, use it
+            # Otherwise we need to load it for MSL mode
+            if dem_array is None:
+                dem_array, _ = _reproject_dem_to_aeqd(
+                    dem_paths, 
+                    radar.longitude, 
+                    radar.latitude, 
+                    pass_max_r,
+                    target_resolution=z_res,
+                    use_disk_swap=use_disk_swap,
+                    max_ram_percent=max_ram_percent
+                )
+            
+            terrain_elev = np.nan_to_num(dem_array, nan=0.0)
+            target_h_above_ground = target_alt - terrain_elev
+            
+            # Visible where MVA <= target_h_above_ground and target is above ground
+            mask = np.zeros_like(mva_cart, dtype=np.uint8)
+            visible = (mva_cart <= target_h_above_ground) & (target_h_above_ground >= 0)
+            mask[visible] = 1
+            
+            del terrain_elev, target_h_above_ground, visible
+        
+        del mva_cart
+        if dem_array is not None:
+            del dem_array
+        
+        # Polygonize
+        poly = _polygonize_mask(mask, transform)
+        del mask
         
         if poly.is_empty:
             log.warning(f"Zone {i+1} produced an empty viewshed polygon.")
@@ -676,7 +852,6 @@ def compute_viewshed(
             log.debug(f"Zone {i+1} produced a valid polygon (Area: {poly.area:.1f})")
 
         # Clip to annulus
-        # Create annulus in AEQD
         center = Point(0, 0)
         outer_circle = center.buffer(pass_max_r)
         if z_min > 0:
@@ -685,7 +860,6 @@ def compute_viewshed(
         else:
             annulus = outer_circle
             
-        # Intersect viewshed with annulus
         clipped_poly = poly.intersection(annulus)
         
         if not clipped_poly.is_empty:
@@ -694,8 +868,7 @@ def compute_viewshed(
         else:
             log.warning(f"Zone {i+1} clipped polygon is empty.")
             
-        # Cleanup
-        del dem_array, poly, clipped_poly
+        del poly, clipped_poly
         
     # Union all zones
     from shapely.ops import unary_union
@@ -710,12 +883,10 @@ def compute_viewshed(
     else:
         log.info(f"Final AEQD polygon area: {poly_aeqd.area:.1f}")
     
-    # 5. Reproject back to WGS84
-    
-    # 5. Reproject back to WGS84
+    # Reproject back to WGS84
     if progress_callback:
         progress_callback("Transforming to WGS84", 0)
-    # Define CRSs
+    
     aeqd_proj = f"+proj=aeqd +lat_0={radar.latitude} +lon_0={radar.longitude} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
     crs_aeqd = pyproj.CRS(aeqd_proj)
     crs_wgs84 = pyproj.CRS("EPSG:4326")
