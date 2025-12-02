@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two-Tier Cache Architecture**: RangePlotter now uses a two-tier caching system:
   - **Tier 1 (ViewshedCache)**: Caches MVA rasters (physics layer) - reusable across altitudes and styles.
   - **Tier 2 (StateManager)**: Tracks output KML validity - includes target altitude and styling in hash.
+- **Consistent Output Naming**: Standardized output file naming across commands:
+  - `detection-range`: Files now output to a flat folder structure (removed per-sensor subfolders)
+  - `horizon`: Renamed output file from `horizons.kml` to `rangeplotter-union-horizon.kml`
 
 ### Documentation
 - **Data Caching Guide**: Added comprehensive caching documentation to the User Guide (`docs/guide/features.md`), covering DEM tile cache, viewshed MVA cache, cache management commands, and the two-tier architecture.

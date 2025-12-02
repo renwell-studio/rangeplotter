@@ -393,7 +393,7 @@ def horizon(
 
     out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
-    kml_path = out_path / "horizons.kml"
+    kml_path = out_path / "rangeplotter-union-horizon.kml"
     
     metadata = {
         "Utility": f"RangePlotter {__version__}",
@@ -1215,11 +1215,7 @@ def detection_range(
                                 "fill_opacity": 0.3
                             }
                         
-                        # Create specific output directory
-                        specific_out_dir = output_dir / base_name
-                        specific_out_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Construct filename
+                        # Construct filename (flat structure - no subfolders)
                         alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                         rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
                         ref_suffix = f"_{ref}" if ref else ""
@@ -1272,7 +1268,7 @@ def detection_range(
 
                         export_viewshed_kml(
                             viewshed_polygon=task_poly,
-                            output_path=specific_out_dir / filename,
+                            output_path=output_dir / filename,
                             altitude=alt,
                             style_config=style_to_use,
                             sensors=sensors_list,
@@ -1286,7 +1282,7 @@ def detection_range(
                             "altitude": alt,
                             "range": rng,
                             "filename": filename,
-                            "path": specific_out_dir / filename
+                            "path": output_dir / filename
                         })
             
             # Advance progress bar for the group
