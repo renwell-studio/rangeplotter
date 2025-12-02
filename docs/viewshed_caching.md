@@ -175,6 +175,9 @@ When `viewshed` or `network run` is executed:
 *   **Variable Sensor Height**: Changing the sensor height fundamentally alters the shadow geometry. This still requires a full recalculation (new hash).
 *   **Disk Usage**: Float32 rasters are larger than binary masks. A cache pruning strategy (LRU) will eventually be required.
 
+## Outstanding Items (Post v0.1.7)
+*   **`--no-cache` CLI flag**: Add a `--no-cache` flag to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations. The internal `use_cache` parameter already exists in `compute_viewshed()`; this just needs CLI exposure.
+
 ## Implementation Plan
 
 ---
