@@ -79,4 +79,140 @@ RangePlotter employs a "multiscale" approach to balance speed and accuracy.
 ## Sequential Filenaming
 Output files are automatically prefixed with numbers (e.g., `01_`, `02_`) based on the target altitude. This ensures that when you load a folder of results into Google Earth, they appear in a logical order (lowest altitude to highest).
 
+## Data Caching
+
+RangePlotter uses a two-tier caching system to minimize redundant downloads and computations. Understanding how caching works helps you manage disk space and troubleshoot issues.
+
+### DEM Tile Cache
+
+**Location:** `data_cache/dem/`
+
+RangePlotter downloads Copernicus GLO-30 Digital Elevation Model (DEM) tiles on-demand and caches them locally.
+
+**Behavior:**
+- Tiles are 1°×1° geographic cells (~100 MB each, compressed).
+- Once downloaded, tiles are reused for any analysis in that region.
+- The cache persists across sessions and RangePlotter versions.
+- Tiles are never automatically deleted; manual cleanup is required if disk space is needed.
+
+**Typical Sizes:**
+| Coverage | Approximate Size |
+|----------|------------------|
+| Single sensor (500km radius) | ~500 MB - 2 GB |
+| Regional network (10 sensors) | ~2 - 10 GB |
+| National-scale analysis | ~10 - 50 GB |
+
+**Management:**
+```bash
+# Check DEM cache size
+du -sh data_cache/dem/
+
+# Clear DEM cache (will re-download on next run)
+rm -rf data_cache/dem/
+```
+
+### Viewshed Cache (MVA Surfaces)
+
+**Location:** `data_cache/viewsheds/`
+
+RangePlotter caches the expensive Line-of-Sight geometry calculations as **Minimum Visible Altitude (MVA)** surfaces. This is a physics-level cache that enables instant recomputation for different target altitudes.
+
+**How It Works:**
+
+Instead of computing "visible/not visible" for a specific altitude, RangePlotter computes the *minimum altitude a target must be at* to be visible from each point. This MVA surface can then be thresholded instantly for any target altitude.
+
+**What Triggers a Cache Hit:**
+- Changing the target altitude (e.g., from 500m to 1000m)
+- Changing visual styling (fill color, line color, opacity)
+- Re-running the same sensor with different output options
+
+**What Triggers a Cache Miss (Full Recalculation):**
+- Changing sensor position (latitude/longitude)
+- Changing sensor height (AGL)
+- Changing the atmospheric refraction k-factor
+- Changing the Earth model
+
+**Storage Format:**
+- Compressed GeoTIFF files (Float32, LZW compression)
+- One file per multiscale zone (near, mid, far)
+- Typical size: 5-20 MB per zone
+
+**Typical Sizes:**
+| Scenario | Approximate Size |
+|----------|------------------|
+| Single sensor, 3 zones | ~30 - 60 MB |
+| 10 sensors | ~300 - 600 MB |
+| 50 sensors | ~1.5 - 3 GB |
+
+**Management:**
+```bash
+# Check viewshed cache size
+du -sh data_cache/viewsheds/
+
+# Clear viewshed cache (will recompute on next run)
+rm -rf data_cache/viewsheds/
+
+# Bypass cache for a single run (force fresh calculation)
+rangeplotter viewshed -i input.kml --no-cache
+```
+
+**Cache Versioning:**
+The viewshed cache includes a version identifier. When RangePlotter's calculation algorithm is updated, old cache files are automatically ignored and fresh calculations are performed. You do not need to manually clear the cache after upgrading.
+
+### Two-Tier Cache Architecture
+
+RangePlotter uses a **two-tier caching system** to maximize performance:
+
+| Tier | System | What It Caches | Hash Includes |
+|------|--------|----------------|---------------|
+| 1 | **Viewshed Cache** | MVA raster (physics) | Sensor position, height, k-factor, Earth model |
+| 2 | **Output State** | KML file validity | All of Tier 1 + target altitude + styling |
+
+**How They Work Together:**
+
+```
+User runs: rangeplotter viewshed -i radar.kml -a 100
+
+┌─────────────────────────────────────────────────────────┐
+│ Step 1: Output State Check                              │
+│   Does output KML exist with matching parameters?       │
+│   → YES: Skip everything (instant)                      │
+│   → NO: Continue to Step 2                              │
+└─────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────┐
+│ Step 2: Viewshed Cache Check                            │
+│   Does MVA raster exist for this sensor/zone?           │
+│   → YES: Load from cache (skip DEM & radial sweep)      │
+│   → NO: Compute MVA, save to cache                      │
+└─────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────┐
+│ Step 3: Generate Output                                 │
+│   Threshold MVA at target altitude → binary mask        │
+│   Polygonize → vectors → Apply styling → Export KML     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Example Scenarios:**
+
+| Scenario | Viewshed Cache | Output State | Result |
+|----------|----------------|--------------|--------|
+| Identical command | HIT | HIT | Skip everything (instant) |
+| Same sensor, different altitude | HIT | MISS | Load cached MVA, threshold, export |
+| Same sensor, different color | HIT | MISS | Load cached MVA, re-export with new style |
+| Different sensor height | MISS | MISS | Full recalculation |
+
+This architecture means that running `detection-range` (which tests 10+ altitudes) is ~10x faster after the first run, since only the thresholding and export steps need to repeat.
+
+### Cache Directory Configuration
+
+The cache directory location is configurable in `config.yaml`:
+
+```yaml
+cache_dir: "data_cache"  # Default location
+```
+
+All caches (DEM tiles, viewshed MVA surfaces) are stored under this directory.
+
 

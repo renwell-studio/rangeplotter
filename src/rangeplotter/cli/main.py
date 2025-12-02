@@ -378,6 +378,7 @@ def viewshed(
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
     check_download: bool = typer.Option(False, "--check-download", "--check", help="Check download requirements without downloading full dataset."),
     force: bool = typer.Option(False, "--force", help="Force recalculation even if output exists and matches state."),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass the MVA viewshed cache. Forces recomputation of all zones."),
     filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
@@ -774,7 +775,8 @@ def viewshed(
                     cfg_dict, 
                     progress_callback=_update_progress, 
                     rich_progress=prog,
-                    altitude_mode=altitude_mode
+                    altitude_mode=altitude_mode,
+                    use_cache=not no_cache
                 )
                 
                 out_path = out_dir_path / filename

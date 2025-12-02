@@ -20,10 +20,12 @@ src/rangeplotter/io/csv_input.py
 src/rangeplotter/io/dem.py
 src/rangeplotter/io/export.py
 src/rangeplotter/io/kml.py
+src/rangeplotter/io/viewshed_cache.py
 src/rangeplotter/los/rings.py
 src/rangeplotter/los/viewshed.py
 src/rangeplotter/models/radar_site.py
 src/rangeplotter/utils/logging.py
+src/rangeplotter/utils/session.py
 src/rangeplotter/utils/state.py
 tests/test_auth.py
 tests/test_auth_extra.py
@@ -47,8 +49,11 @@ tests/test_kml_extra.py
 tests/test_logging.py
 tests/test_models.py
 tests/test_offline_mode.py
+tests/test_optional_union.py
 tests/test_processing.py
 tests/test_rings.py
 tests/test_sensor_override.py
 tests/test_sequential_filenames.py
+tests/test_smart_resume.py
+tests/test_viewshed_cache.py
 tests/test_viewshed_integration.py

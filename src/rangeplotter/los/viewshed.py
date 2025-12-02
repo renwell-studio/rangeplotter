@@ -262,6 +262,28 @@ def _compute_mva_polar(
     Returns a Float32 array where each cell contains the minimum altitude (AGL)
     a target must be at to be visible from the sensor.
     
+    Physics:
+        The MVA represents the lowest altitude a target must be at to clear all
+        terrain obstructions along the line-of-sight ray from the sensor.
+        
+        For each point at distance r along a radial ray:
+        1. Track the maximum elevation angle encountered so far:
+           θ_terrain = (h_terrain - h_sensor) / r - r / (2 * R_eff)
+           M = max(θ_terrain) along the ray
+        
+        2. Compute the MSL altitude required to clear angle M:
+           h_req = h_sensor + r * (M + r / (2 * R_eff))
+        
+        3. Convert to AGL:
+           MVA = max(0, h_req - h_terrain)
+        
+        Where R_eff = R_earth * k_factor accounts for atmospheric refraction.
+        
+        MVA Interpretation:
+        - MVA = 0: Ground is visible (no obstruction)
+        - MVA = 500: Target must be at least 500m AGL to be seen
+        - MVA = inf: Location is beyond horizon or completely obscured
+    
     Args:
         dem_array: Elevation data in AEQD (meters).
         transform: Affine transform of the DEM (AEQD).

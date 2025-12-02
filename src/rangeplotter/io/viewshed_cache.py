@@ -20,6 +20,9 @@ from rasterio.crs import CRS
 
 log = logging.getLogger(__name__)
 
+# Cache version - increment when algorithm changes to invalidate stale caches
+CACHE_VERSION = "1"
+
 
 class ViewshedCache:
     """
@@ -88,6 +91,7 @@ class ViewshedCache:
         """
         # Format with specified precision for reproducibility
         hash_input = (
+            f"version={CACHE_VERSION}|"
             f"lat={lat:.6f}|"
             f"lon={lon:.6f}|"
             f"ground_elev={ground_elev:.1f}|"
@@ -256,10 +260,18 @@ class ViewshedCache:
             Dictionary with cache statistics.
         """
         files = list(self.cache_dir.glob("*.tif"))
-        total_size = sum(f.stat().st_size for f in files)
+        total_size = 0
+        valid_count = 0
+        for f in files:
+            try:
+                total_size += f.stat().st_size
+                valid_count += 1
+            except OSError:
+                # File was deleted between glob and stat (race condition)
+                pass
         
         return {
-            'count': len(files),
+            'count': valid_count,
             'total_size_bytes': total_size,
             'total_size_mb': total_size / 1024 / 1024,
             'cache_dir': str(self.cache_dir)
