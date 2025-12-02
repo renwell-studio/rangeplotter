@@ -1,6 +1,7 @@
 from __future__ import annotations
 import typer
 import psutil
+import signal
 from rich import print, progress
 from rich.table import Table
 from rich.console import Console
@@ -12,6 +13,13 @@ from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.auth.cdse import CdseAuth
 from rangeplotter.utils.logging import setup_logging, log_memory_usage
+from rangeplotter.utils.shutdown import (
+    is_shutdown_requested, 
+    reset_shutdown_state, 
+    request_shutdown,
+    request_force_quit,
+    cleanup_temp_cache_files
+)
 from rangeplotter.processing import clip_viewshed, union_viewsheds
 from rangeplotter.io.export import export_viewshed_kml
 from rangeplotter.io.csv_input import parse_csv_radars
@@ -23,6 +31,21 @@ import yaml
 import datetime
 
 __version__ = "0.1.6"
+
+def _signal_handler(signum, frame):
+    """Handle Ctrl-C interrupt signal.
+    
+    First interrupt: Set graceful shutdown flag, allowing current operation to finish.
+    Second interrupt: Force quit immediately with cleanup.
+    """
+    if is_shutdown_requested():
+        request_force_quit()
+        print("\n[red]Force quit. Cleaning up...[/red]")
+        cleanup_temp_cache_files()
+        raise SystemExit(1)
+    else:
+        request_shutdown()
+        print("\n[yellow]Interrupt received. Finishing current operation... Press Ctrl-C again to force quit.[/yellow]")
 
 app = typer.Typer(help="Radar LOS utility", context_settings={"help_option_names": ["-h", "--help"]})
 app.add_typer(network.app, name="network")
@@ -237,6 +260,10 @@ def horizon(
     This command computes the maximum possible detection range based on Earth curvature 
     and atmospheric refraction (k-factor), ignoring terrain obstructions.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     import rangeplotter
     # print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
@@ -414,6 +441,10 @@ def viewshed(
 
     Outputs are saved as individual KML files per site and target altitude.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     if config:
         settings = Settings.from_file(config)
@@ -715,6 +746,13 @@ def viewshed(
         current_step = 0
         
         for sensor, sensor_h, alt in tasks_to_run:
+            # Check for graceful shutdown request
+            if is_shutdown_requested():
+                prog.console.print("[yellow]Shutdown requested. Stopping after cleanup...[/yellow]")
+                cleanup_temp_cache_files()
+                print(f"\n[bold]Interrupted. Completed {current_step // 100} of {len(tasks_to_run)} viewsheds.[/bold]")
+                raise typer.Exit(code=130)  # 130 = 128 + SIGINT(2)
+            
             # Temporarily override sensor height for calculation
             # We need to be careful not to permanently modify the sensor object if we are iterating
             original_h = sensor.sensor_height_m_agl
@@ -904,6 +942,10 @@ def detection_range(
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     created_files = []
 

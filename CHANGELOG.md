@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--no-cache` Flag**: Added `--no-cache` option to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations.
 - **Cache Versioning**: MVA cache files include a version identifier. Algorithm updates automatically invalidate stale caches without manual intervention.
 - **Altitude Mode Debug Logging**: Added debug logging (`-vv`) to show how sensor altitudes are calculated from KML altitude modes and DEM ground elevation.
+- **Graceful Ctrl-C Handling**: Commands now handle keyboard interrupts gracefully:
+  - First Ctrl-C: Prints message and finishes current operation, then exits cleanly
+  - Second Ctrl-C: Immediate termination with cleanup
+  - Partial cache files (`.tmp.*`) are automatically cleaned up on interrupt
 
 ### Fixed
 - **Authentication Check in Viewshed**: Added explicit authentication check to the `viewshed` command before DEM operations, matching `horizon` command behavior. Provides friendly error message on auth failure.
