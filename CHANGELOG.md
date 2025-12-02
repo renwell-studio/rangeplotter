@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2025-12-02
+### Added
+- **Viewshed Caching (MVA Surfaces)**: Implemented physics-level caching using Minimum Visible Altitude (MVA) surfaces. The expensive radial sweep computation is now cached and reused across different target altitudes and styling options, providing ~10x speedup for multi-altitude analyses like `detection-range`.
+- **`--no-cache` Flag**: Added `--no-cache` option to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations.
+- **Cache Versioning**: MVA cache files include a version identifier. Algorithm updates automatically invalidate stale caches without manual intervention.
+
+### Changed
+- **Two-Tier Cache Architecture**: RangePlotter now uses a two-tier caching system:
+  - **Tier 1 (ViewshedCache)**: Caches MVA rasters (physics layer) - reusable across altitudes and styles.
+  - **Tier 2 (StateManager)**: Tracks output KML validity - includes target altitude and styling in hash.
+
+### Documentation
+- **Data Caching Guide**: Added comprehensive caching documentation to the User Guide (`docs/guide/features.md`), covering DEM tile cache, viewshed MVA cache, cache management commands, and the two-tier architecture.
+
 ## [0.1.6] - 2025-11-30
 ### Added
 - **Installation Script**: Replaced `install_or_upgrade.sh` with a robust `install.sh`. The new script features:

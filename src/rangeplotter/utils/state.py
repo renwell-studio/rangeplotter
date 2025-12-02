@@ -14,9 +14,13 @@ class StateManager:
 
     def compute_hash(self, site: RadarSite, target_alt: float, refraction_k: float, 
                      earth_radius_model: str = "ellipsoidal", max_range: float = 0.0,
-                     sensor_height_m_agl: float = 0.0) -> str:
+                     sensor_height_m_agl: float = 0.0,
+                     fill_color: Optional[str] = None,
+                     line_color: Optional[str] = None,
+                     fill_opacity: Optional[float] = None) -> str:
         """
-        Compute a hash of the parameters that affect the viewshed calculation.
+        Compute a hash of the parameters that affect the viewshed output file.
+        
         Includes:
         - Site location (lat/lon)
         - Site effective height (MSL)
@@ -24,6 +28,10 @@ class StateManager:
         - Physics constants (refraction, earth model)
         - Max range (horizon)
         - Sensor height AGL (explicitly)
+        - Visual styling (colors, opacity)
+        
+        Note: This hash is for output-level caching (StateManager). The physics-level
+        cache (ViewshedCache) uses a separate hash that excludes target_alt and styling.
         """
         # We use a fixed precision for floats to avoid floating point jitter
         h_msl = site.radar_height_m_msl
@@ -32,7 +40,11 @@ class StateManager:
         data = f"{site.name}|{site.latitude:.6f}|{site.longitude:.6f}|"
         data += f"{h_val}|{sensor_height_m_agl:.2f}|"
         data += f"{target_alt:.2f}|{refraction_k:.3f}|"
-        data += f"{earth_radius_model}|{max_range:.1f}"
+        data += f"{earth_radius_model}|{max_range:.1f}|"
+        # Include styling parameters - use 'default' for None values
+        data += f"{fill_color or 'default'}|"
+        data += f"{line_color or 'default'}|"
+        data += f"{fill_opacity:.2f}" if fill_opacity is not None else "default"
         
         return hashlib.md5(data.encode("utf-8")).hexdigest()
 

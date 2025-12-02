@@ -11,5 +11,6 @@
 *   **Multiscale**: Keep `multiscale.enable: true`. Disabling it will force 30m resolution for the entire calculation, which can be 3-4x slower for very large radii with minimal visual difference.
 
 ## Data Management
-*   **Cache**: The `data_cache/` directory stores downloaded DEM tiles. Do not delete this unless you want to free up space; re-downloading tiles takes time.
+*   **Cache**: RangePlotter maintains two caches under `data_cache/`: DEM tiles and viewshed MVA surfaces. See [Data Caching](features.md#data-caching) for detailed information on cache locations, sizes, and management.
 *   **Input Organization**: You can organize your input KMLs into subfolders within `working_files/sensor_locations/`. RangePlotter can process them recursively or you can point it to specific files.
+*   **Disk Space**: For large-scale analyses, monitor your cache directories. DEM tiles (10-50 GB for national coverage) and viewshed caches (1-3 GB for 50 sensors) can accumulate over time.

@@ -21,6 +21,7 @@ Welcome to the RangePlotter User Guide. This documentation will help you install
     *   Sensor Altitude Override
     *   KML Export Modes
     *   Multiscale Processing
+    *   Data Caching (DEM & Viewshed)
 5.  [Best Practices](best_practices.md)
     *   Optimizing for Google Earth
     *   Performance Tuning
