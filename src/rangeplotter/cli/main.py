@@ -316,7 +316,27 @@ def horizon(
         
         r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
         if verbose >= 1:
-            print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+            print(f"    [green]✓[/green] Ground elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+        
+        # Log how radar height is being calculated based on altitude mode
+        if verbose >= 2:
+            h_agl = r.sensor_height_m_agl
+            if isinstance(h_agl, list):
+                h_agl_str = f"[{', '.join(f'{h:.1f}' for h in h_agl)}]"
+            else:
+                h_agl_str = f"{h_agl:.1f}"
+            
+            if r.altitude_mode == "relativeToGround":
+                kml_agl = r.input_altitude or 0.0
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: relativeToGround mode - KML altitude ({kml_agl:.1f}m AGL) + DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+            elif r.altitude_mode == "clampToGround":
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: clampToGround mode - DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+            elif r.altitude_mode == "absolute":
+                kml_abs = r.input_altitude or r.ground_elevation_m_msl
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: absolute mode - KML altitude ({kml_abs:.1f}m MSL) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
 
     if verbose >= 2:
         print("[grey58]DEBUG: Starting horizon computation loop.")
@@ -470,6 +490,14 @@ def viewshed(
         verbose=verbose
     )
 
+    # Friendly auth check
+    if not auth.ensure_access_token():
+        print("\n[bold red]Authentication Failed[/bold red]")
+        print("Could not obtain an access token from Copernicus Data Space Ecosystem.")
+        print("Please check your .env file or run 'rangeplotter extract-refresh-token'.")
+        print("See README for details.\n")
+        raise typer.Exit(code=1)
+
     dem_cache = Path(settings.cache_dir) / "dem"
     dem_client = DemClient(
         base_url=settings.copernicus_api.base_url,
@@ -516,7 +544,27 @@ def viewshed(
             dem_client.ensure_tiles(bbox_local)
             r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
             if verbose >= 1:
-                print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+                print(f"    [green]✓[/green] Ground elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+            
+            # Log how radar height is being calculated based on altitude mode
+            if verbose >= 2:
+                h_agl = r.sensor_height_m_agl
+                if isinstance(h_agl, list):
+                    h_agl_str = f"[{', '.join(f'{h:.1f}' for h in h_agl)}]"
+                else:
+                    h_agl_str = f"{h_agl:.1f}"
+                
+                if r.altitude_mode == "relativeToGround":
+                    kml_agl = r.input_altitude or 0.0
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: relativeToGround mode - KML altitude ({kml_agl:.1f}m AGL) + DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+                elif r.altitude_mode == "clampToGround":
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: clampToGround mode - DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+                elif r.altitude_mode == "absolute":
+                    kml_abs = r.input_altitude or r.ground_elevation_m_msl
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: absolute mode - KML altitude ({kml_abs:.1f}m MSL) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
 
     # Interactive check for missing local tiles
     local_tiles_fixed = False

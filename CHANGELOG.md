@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Viewshed Caching (MVA Surfaces)**: Implemented physics-level caching using Minimum Visible Altitude (MVA) surfaces. The expensive radial sweep computation is now cached and reused across different target altitudes and styling options, providing ~10x speedup for multi-altitude analyses like `detection-range`.
 - **`--no-cache` Flag**: Added `--no-cache` option to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations.
 - **Cache Versioning**: MVA cache files include a version identifier. Algorithm updates automatically invalidate stale caches without manual intervention.
+- **Altitude Mode Debug Logging**: Added debug logging (`-vv`) to show how sensor altitudes are calculated from KML altitude modes and DEM ground elevation.
+
+### Fixed
+- **Authentication Check in Viewshed**: Added explicit authentication check to the `viewshed` command before DEM operations, matching `horizon` command behavior. Provides friendly error message on auth failure.
 
 ### Changed
 - **Two-Tier Cache Architecture**: RangePlotter now uses a two-tier caching system:
@@ -18,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - **Data Caching Guide**: Added comprehensive caching documentation to the User Guide (`docs/guide/features.md`), covering DEM tile cache, viewshed MVA cache, cache management commands, and the two-tier architecture.
+- **KML Altitude Mode Interpretation**: Documented how RangePlotter interprets KML `altitudeMode` settings (clampToGround, relativeToGround, absolute) using Copernicus DEM as ground reference.
 
 ## [0.1.6] - 2025-11-30
 ### Added
