@@ -61,8 +61,14 @@ Calculates the theoretical maximum geometric horizon (range rings) based on Eart
 rangeplotter horizon [OPTIONS]
 ```
 
+**Key Options:**
+*   `--union/--no-union`: Control output format (default: `--union`).
+    *   `--union`: Output a single `rangeplotter-union-horizon.kml` with all sensors.
+    *   `--no-union`: Output individual `{prefix}rangeplotter-{name}-horizon.kml` files per sensor.
+*   `--output / -o`: Output directory. Pure names go to `working_files/horizons/`, paths with `./`, `../`, or `/` are used as-is.
+
 **Output:**
-Generates a `horizons.kml` file containing range rings for all sensors at the configured target altitudes. Useful for comparing "theoretical max" vs "actual terrain-limited" performance.
+Generates a KML file containing range rings for all sensors at the configured target altitudes. Useful for comparing "theoretical max" vs "actual terrain-limited" performance.
 
 ---
 

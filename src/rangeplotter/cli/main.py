@@ -283,6 +283,7 @@ def horizon(
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
     output_dir: Optional[Path] = typer.Option(default_horizon_dir, "--output", "-o", help="Override output directory"),
     filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
+    union: Optional[bool] = typer.Option(None, "--union/--no-union", help="Union all horizons into single file (default: True). Use --no-union for per-sensor files."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -290,6 +291,9 @@ def horizon(
     
     This command computes the maximum possible detection range based on Earth curvature 
     and atmospheric refraction (k-factor), ignoring terrain obstructions.
+    
+    By default, outputs a single file with all horizons. Use --no-union to output
+    individual files per sensor.
     """
     # Register signal handler for graceful shutdown
     reset_shutdown_state()
@@ -419,12 +423,14 @@ def horizon(
     
     # Resolve output directory using F3 logic
     out_path = resolve_output_path(output_dir, default_horizon_dir)
-
     out_path.mkdir(parents=True, exist_ok=True)
-    from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
-    kml_path = out_path / "rangeplotter-union-horizon.kml"
     
-    metadata = {
+    from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
+    
+    # Resolve union setting (default: True)
+    do_union = union if union is not None else settings.union_outputs
+    
+    base_metadata = {
         "Utility": f"RangePlotter {__version__}",
         "Command": "horizon",
         "Date": datetime.datetime.now().isoformat(),
@@ -432,10 +438,41 @@ def horizon(
         "Refraction Factor (k)": settings.atmospheric_k_factor,
     }
     
-    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=metadata)
-    if verbose >= 2:
-        print("[grey58]DEBUG: Export complete.")
-    print(f"[green]Exported horizons to {kml_path}[/green]")
+    if do_union:
+        # Single file with all horizons
+        kml_path = out_path / "rangeplotter-union-horizon.kml"
+        export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=base_metadata)
+        if verbose >= 2:
+            print("[grey58]DEBUG: Export complete.")
+        print(f"[green]Exported horizons to {kml_path}[/green]")
+    else:
+        # Per-sensor files
+        exported_files = []
+        for i, r in enumerate(radars, 1):
+            safe_name = r.name.replace(" ", "_").replace("/", "-")
+            prefix = f"{i:02d}_"
+            filename = f"{prefix}rangeplotter-{safe_name}-horizon.kml"
+            kml_path = out_path / filename
+            
+            # Filter rings and meta for this sensor only
+            sensor_rings = {r.name: rings_all[r.name]}
+            sensor_meta = {r.name: meta[r.name]}
+            
+            sensor_metadata = base_metadata.copy()
+            sensor_metadata.update({
+                "Sensor Name": r.name,
+                "Sensor Location": f"{r.latitude:.5f}, {r.longitude:.5f}",
+                "Sensor Ground Elevation": f"{r.ground_elevation_m_msl:.1f} m MSL" if r.ground_elevation_m_msl else "N/A",
+            })
+            
+            export_horizons_kml(str(kml_path), sensor_rings, sensor_meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=sensor_metadata)
+            exported_files.append(kml_path)
+            if verbose >= 1:
+                print(f"  [green]✓[/green] {filename}")
+        
+        if verbose >= 2:
+            print("[grey58]DEBUG: Export complete.")
+        print(f"[green]Exported {len(exported_files)} horizon files to {out_path}[/green]")
     
     end_time = time.time()
     total_time = end_time - start_time
