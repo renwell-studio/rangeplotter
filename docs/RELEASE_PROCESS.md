@@ -42,22 +42,26 @@ We follow a simple feature-branch workflow to maintain stability.
     ```
 
 ### Merging
+Always use `--no-ff` (no fast-forward) merges to preserve branch topology and maintain a clear audit trail. This applies to all branch types (features, fixes, docs).
+
 1.  **Switch to Main**:
     ```bash
     git checkout main
     ```
-2.  **Merge Feature**:
+2.  **Merge Branch (No Fast-Forward)**:
     ```bash
-    git merge feature-name
+    git merge --no-ff branch-name -m "Merge branch 'branch-name': Brief description"
     ```
 3.  **Push**:
     ```bash
     git push origin main
     ```
-4.  **Cleanup**: Delete the feature branch if no longer needed.
+4.  **Cleanup**: Delete the branch if no longer needed.
     ```bash
-    git branch -d feature-name
+    git branch -d branch-name
     ```
+
+> **Why `--no-ff`?** It creates a merge commit that groups all branch commits together, making it easy to revert entire features (`git revert -m 1 <merge>`), understand history (`git log --first-parent`), and track when changes were integrated.
 
 ---
 
