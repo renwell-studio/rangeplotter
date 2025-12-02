@@ -175,10 +175,169 @@ When `viewshed` or `network run` is executed:
 *   **Variable Sensor Height**: Changing the sensor height fundamentally alters the shadow geometry. This still requires a full recalculation (new hash).
 *   **Disk Usage**: Float32 rasters are larger than binary masks. A cache pruning strategy (LRU) will eventually be required.
 
-## Outstanding Items (Post v0.1.7)
-*   **`--no-cache` CLI flag**: Add a `--no-cache` flag to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations. The internal `use_cache` parameter already exists in `compute_viewshed()`; this just needs CLI exposure.
+## Outstanding Items
 
-## Implementation Plan
+### Pre-Merge (v0.1.7)
+
+| ID | Item | Status | Rationale |
+|----|------|--------|-----------|
+| O1 | **Cache Versioning** | 🔲 TODO | If the MVA algorithm changes in a future release, stale cached files will produce incorrect results. Add a `CACHE_VERSION` constant to the hash to invalidate old caches automatically. |
+| O2 | **Error Logging in Cache Operations** | 🔲 TODO | The `get()` method silently catches all exceptions with `return None`. This masks disk errors, permission issues, and corrupted files. Add `logging.warning()` calls. |
+| O3 | **`--no-cache` CLI Flag** | 🔲 TODO | Add a `--no-cache` flag to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations. The internal `use_cache` parameter already exists in `compute_viewshed()`; this just needs CLI exposure. |
+| O4 | **Race Condition in `get_cache_stats()`** | 🔲 TODO | When iterating over cache files, a concurrent write (atomic rename) could cause `FileNotFoundError`. Wrap file operations in try/except. |
+| O5 | **Consistent Logging** | 🔲 TODO | Replace `print()` statements in `viewshed.py` cache hit/miss logging with proper `logging.info()` calls for consistency with the rest of the codebase. |
+| O6 | **User Documentation** | 🔲 TODO | Update docs/guide/ with cache location, expected size growth, and manual clearing instructions. |
+
+### Post-Merge (Future Enhancement)
+
+| ID | Item | Rationale |
+|----|------|-----------|
+| O7 | **Cache Metadata in GeoTIFF** | Store RangePlotter version, timestamp, and original parameters in GeoTIFF tags for debugging and potential future cache migration. |
+| O8 | **Cache Pruning Command** | Add `rangeplotter cache clear` or `rangeplotter cache prune` CLI commands for user-friendly cache management. |
+
+---
+
+## Outstanding Items Implementation Plan
+
+### Phase O1: Cache Versioning
+
+**File:** `src/rangeplotter/io/viewshed_cache.py`
+
+**Changes:**
+1. Add a module-level constant:
+   ```python
+   # Increment this when the MVA calculation algorithm changes
+   CACHE_VERSION = "1"
+   ```
+
+2. Update `compute_hash()` to include the version:
+   ```python
+   def compute_hash(self, ...) -> str:
+       hash_str = (
+           f"v{CACHE_VERSION}|"  # Version prefix
+           f"{lat:.6f}|{lon:.6f}|..."
+       )
+   ```
+
+**Testing:**
+- Verify existing cache files are invalidated (cache miss) after version change.
+- Verify new cache files are created with version in hash.
+
+---
+
+### Phase O2: Error Logging in Cache Operations
+
+**File:** `src/rangeplotter/io/viewshed_cache.py`
+
+**Changes:**
+1. Update the `get()` method's exception handler:
+   ```python
+   except Exception as e:
+       log.warning(f"Cache read failed for {hash_key[:12]}...: {e}")
+       return None
+   ```
+
+2. Ensure `log` is imported at module level (already present, verify):
+   ```python
+   import logging
+   log = logging.getLogger(__name__)
+   ```
+
+**Testing:**
+- Create a corrupted `.tif` file and verify warning is logged.
+- Verify normal operation continues after cache read failure.
+
+---
+
+### Phase O3: `--no-cache` CLI Flag
+
+**File:** `src/rangeplotter/cli/main.py`
+
+**Changes:**
+1. Add option to `viewshed` command:
+   ```python
+   @app.command()
+   def viewshed(
+       ...
+       no_cache: bool = typer.Option(False, "--no-cache", help="Bypass MVA cache (force recalculation)")
+   ):
+   ```
+
+2. Pass to `compute_viewshed()`:
+   ```python
+   poly = compute_viewshed(
+       ...,
+       use_cache=not no_cache
+   )
+   ```
+
+**Testing:**
+- Run with `--no-cache`, verify logs show no cache HIT/MISS messages.
+- Verify no new cache files are created when `--no-cache` is used.
+
+---
+
+### Phase O4: Race Condition Fix in `get_cache_stats()`
+
+**File:** `src/rangeplotter/io/viewshed_cache.py`
+
+**Changes:**
+1. Update `get_cache_stats()` to handle concurrent access:
+   ```python
+   def get_cache_stats(self) -> dict:
+       files = list(self.cache_dir.glob("*.tif"))
+       total_size = 0
+       valid_count = 0
+       for f in files:
+           try:
+               total_size += f.stat().st_size
+               valid_count += 1
+           except (FileNotFoundError, OSError):
+               continue  # File was renamed/deleted during iteration
+       return {
+           'num_files': valid_count,
+           'total_size_mb': total_size / 1024 / 1024,
+           'cache_dir': str(self.cache_dir)
+       }
+   ```
+
+**Testing:**
+- Unit test with mocked file system that raises `FileNotFoundError`.
+
+---
+
+### Phase O5: Consistent Logging
+
+**File:** `src/rangeplotter/los/viewshed.py`
+
+**Changes:**
+1. Locate and replace any `print()` statements related to cache operations with `log.info()`:
+   ```python
+   # Before
+   print(f"Zone {i+1}: Cache HIT ({zone_hash[:8]}...)")
+   
+   # After  
+   log.info(f"Zone {i+1}: Cache HIT ({zone_hash[:8]}...)")
+   ```
+
+**Testing:**
+- Verify cache messages appear in log file and console with proper formatting.
+
+---
+
+### Phase O6: User Documentation
+
+**Files:** `docs/guide/`
+
+**Changes:**
+Add new pages or append to existing docs as appropriate. Take the descriptive sections from `viewshed_caching.md` and use them as the skeleton for the new documentation. Ensure that the documentation explains in detail all of our caching behaviours (i.e. also DEM tile caching):
+
+**Testing:**
+- Review documentation for accuracy and clarity.
+
+---
+
+## Implementation Plan (complete)
 
 ---
 
