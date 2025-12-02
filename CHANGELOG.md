@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Authentication Check in Viewshed**: Added explicit authentication check to the `viewshed` command before DEM operations, matching `horizon` command behavior. Provides friendly error message on auth failure.
+- **Install Script Tab Completion**: Added readline support (`read -e`) to the install script for directory path tab completion.
 
 ### Changed
 - **Two-Tier Cache Architecture**: RangePlotter now uses a two-tier caching system:
