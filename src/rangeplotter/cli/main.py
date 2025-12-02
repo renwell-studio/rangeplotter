@@ -47,6 +47,37 @@ def _signal_handler(signum, frame):
         request_shutdown()
         print("\n[yellow]Interrupt received. Finishing current operation... Press Ctrl-C again to force quit.[/yellow]")
 
+def resolve_output_path(user_path: Optional[Path], default_dir: Path) -> Path:
+    """
+    Resolve user-provided output path.
+    
+    - Pure filename/foldername (no path separators) → place in default_dir
+    - Paths starting with './' or '../' or absolute → use as-is
+    
+    Args:
+        user_path: The path provided by the user, or None
+        default_dir: The default directory to use if user_path is pure name
+        
+    Returns:
+        Resolved Path object
+    """
+    if user_path is None:
+        return default_dir
+        
+    user_path = Path(user_path)
+    
+    # Absolute path: use as-is
+    if user_path.is_absolute():
+        return user_path
+    
+    # Relative path with explicit directory indicator: use as-is
+    path_str = str(user_path)
+    if path_str.startswith('./') or path_str.startswith('../') or '/' in path_str:
+        return user_path
+    
+    # Pure name: place in default directory
+    return default_dir / user_path
+
 app = typer.Typer(help="Radar LOS utility", context_settings={"help_option_names": ["-h", "--help"]})
 app.add_typer(network.app, name="network")
 print("RangePlotter by Renwell | Licence: MIT | Support: ko-fi.com/renwell")
@@ -386,10 +417,8 @@ def horizon(
     if verbose >= 2:
         print("[grey58]DEBUG: Horizon computation finished. Beginning export.")
     
-    if output_dir:
-        out_path = output_dir
-    else:
-        out_path = default_horizon_dir
+    # Resolve output directory using F3 logic
+    out_path = resolve_output_path(output_dir, default_horizon_dir)
 
     out_path.mkdir(parents=True, exist_ok=True)
     from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
@@ -684,12 +713,8 @@ def viewshed(
     from rangeplotter.los.viewshed import compute_viewshed
     from rangeplotter.io.export import export_viewshed_kml
     
-    if output_dir:
-        # User specified output directory, use it directly
-        out_dir_path = Path(output_dir)
-    else:
-        # Default behavior: use config output_dir + /viewshed
-        out_dir_path = Path(settings.output_viewshed_dir)
+    # Resolve output directory using F3 logic
+    out_dir_path = resolve_output_path(output_dir, Path(settings.output_viewshed_dir))
         
     out_dir_path.mkdir(parents=True, exist_ok=True)
     
@@ -1089,6 +1114,8 @@ def detection_range(
             by_alt_ref[key] = []
         by_alt_ref[key].append(item)
 
+    # Resolve output directory using F3 logic
+    output_dir = resolve_output_path(output_dir, default_detection_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Process
