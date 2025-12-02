@@ -36,7 +36,7 @@ rangeplotter viewshed [OPTIONS]
 **Key Options:**
 *   `--input / -i`: Path to input KML/CSV file or directory. Defaults to `working_files/sensor_locations`.
 *   `--output / -o`: Output directory.
-*   `--altitudes / -a`: Comma-separated list of target altitudes to calculate (overrides config).
+*   `--altitude / -a`: Comma-separated list of target altitudes to calculate, or repeated (e.g., `-a 100 -a 500`). Overrides config.
     *   *Example*: `-a 50,100,500`
 *   `--sensor-heights / -sh`: Comma-separated list of sensor heights (AGL) to calculate (overrides config).
     *   *Example*: `-sh 10,20,30`

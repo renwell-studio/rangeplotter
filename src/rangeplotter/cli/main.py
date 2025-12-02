@@ -485,7 +485,8 @@ def viewshed(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/sensor_locations/."),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
-    altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
+    altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitude", "-a", help="Target altitudes in meters (comma separated or repeated: -a 100 -a 500). Overrides config."),
+    altitudes_cli_hidden: Optional[List[str]] = typer.Option(None, "--altitudes", help="Deprecated alias for --altitude.", hidden=True),
     sensor_heights_cli: Optional[List[str]] = typer.Option(None, "--sensor-heights", "-sh", help="Sensor heights AGL in meters (comma separated). Overrides config."),
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
@@ -517,10 +518,16 @@ def viewshed(
     else:
         settings = load_settings()
     
+    # Merge --altitudes (deprecated) with --altitude if both used
+    combined_altitudes_cli = altitudes_cli or []
+    if altitudes_cli_hidden:
+        print("[yellow]Warning: --altitudes is deprecated. Use --altitude instead.[/yellow]")
+        combined_altitudes_cli = list(combined_altitudes_cli) + list(altitudes_cli_hidden)
+    
     # Override altitudes if provided via CLI
-    if altitudes_cli:
+    if combined_altitudes_cli:
         parsed_alts = []
-        for a_str in altitudes_cli:
+        for a_str in combined_altitudes_cli:
             parts = a_str.split(',')
             for p in parts:
                 try:

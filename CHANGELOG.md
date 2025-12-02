@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Pure names (e.g., `my_output`): Placed in default directory (e.g., `working_files/horizons/my_output`)
   - Paths with `./`, `../`, or `/`: Used as-is (relative or absolute paths)
 - **Horizon Union Flag**: Added `--union/--no-union` flag to `horizon` command. When `--no-union` is specified, outputs individual `{prefix}rangeplotter-{name}-horizon.kml` files per sensor instead of a single union file.
+- **Altitude Flag Rename**: Renamed `--altitudes` to `--altitude` in the `viewshed` command. The old `--altitudes` flag remains as a hidden alias for backward compatibility. The new flag also supports repeated use (e.g., `-a 100 -a 500`).
 
 ### Documentation
 - **Data Caching Guide**: Added comprehensive caching documentation to the User Guide (`docs/guide/features.md`), covering DEM tile cache, viewshed MVA cache, cache management commands, and the two-tier architecture.
