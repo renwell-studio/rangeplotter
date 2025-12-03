@@ -332,3 +332,248 @@ Handle KML altitude modes correctly by always using Copernicus DEM as the ground
 ## Deferred to Later Release
 
 - **C1: KML Icons** - Needs design decision on icon style/source
+
+---
+
+## User Acceptance Test Checklist
+
+This checklist is designed for execution by an AI coding assistant in the terminal, with output displayed for user validation.
+
+### Prerequisites
+
+```bash
+# Ensure we're on the feature branch and tests pass
+cd /home/andrew/Documents/Computing/rangeplotter
+git status
+python -m pytest tests/ -q --tb=no 2>&1 | tail -5
+```
+
+---
+
+### Test 1: F4 - Altitude Mode Debug Logging
+
+**Purpose:** Verify that `-vv` shows altitude interpretation debug messages.
+
+```bash
+# Create a minimal test KML with relativeToGround altitude mode
+cat > /tmp/test_sensor.kml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Test Sensor</name>
+      <Point>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <coordinates>-63.78,66.52,50</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>
+EOF
+
+# Run horizon with -vv to see debug output (should show altitude interpretation)
+rangeplotter horizon --config config/config.yaml --input /tmp/test_sensor.kml --output /tmp/test_out -vv 2>&1 | head -30
+```
+
+**Expected:** Output should include DEBUG lines mentioning altitude mode (relativeToGround, clampToGround, or absolute) and how the sensor height is calculated.
+
+---
+
+### Test 2: C3 - Graceful Shutdown (Visual Inspection Only)
+
+**Purpose:** Verify Ctrl-C handling message appears (manual test, not automated).
+
+**Manual Test Steps:**
+1. Start a long-running viewshed command
+2. Press Ctrl-C once → should see yellow message about finishing current operation
+3. Press Ctrl-C again → should see force quit message
+
+**Note:** This test requires manual execution. The signal handler registration can be verified in code:
+
+```bash
+# Verify signal handler is registered in viewshed command
+grep -n "signal.signal" src/rangeplotter/cli/main.py | head -5
+grep -n "_signal_handler" src/rangeplotter/cli/main.py | head -5
+```
+
+**Expected:** Signal handler registration and handler function should be found.
+
+---
+
+### Test 3: F2 - Consistent Output Naming
+
+**Purpose:** Verify horizon outputs use new naming convention.
+
+```bash
+# Clean up and run horizon command
+rm -rf /tmp/test_horizon_out
+rangeplotter horizon --config config/config.yaml --input /tmp/test_sensor.kml --output /tmp/test_horizon_out 2>&1
+
+# Check output filename
+ls -la /tmp/test_horizon_out/
+```
+
+**Expected:** Should see `rangeplotter-union-horizon.kml` (not `horizons.kml`).
+
+---
+
+### Test 4: F3 - Output Path Interpretation
+
+**Purpose:** Verify --output handles pure names vs paths correctly.
+
+```bash
+# Test 1: Pure name should go to default directory
+rm -rf working_files/horizons/my_custom_name
+rangeplotter horizon --config config/config.yaml --input /tmp/test_sensor.kml --output my_custom_name 2>&1 | tail -3
+
+# Check it went to default horizons directory
+ls -la working_files/horizons/my_custom_name/ 2>/dev/null || echo "Directory not found in default location"
+
+# Test 2: Path with ./ should be used as-is
+rm -rf ./test_local_output
+rangeplotter horizon --config config/config.yaml --input /tmp/test_sensor.kml --output ./test_local_output 2>&1 | tail -3
+
+# Check it went to local directory
+ls -la ./test_local_output/ 2>/dev/null || echo "Directory not found in local location"
+
+# Cleanup
+rm -rf ./test_local_output working_files/horizons/my_custom_name
+```
+
+**Expected:** 
+- Pure name `my_custom_name` → `working_files/horizons/my_custom_name/`
+- Path `./test_local_output` → `./test_local_output/`
+
+---
+
+### Test 5: F1 - Horizon --union/--no-union Flag
+
+**Purpose:** Verify --no-union creates per-sensor files.
+
+```bash
+# Create multi-sensor test KML
+cat > /tmp/test_multi_sensor.kml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Sensor Alpha</name>
+      <Point><coordinates>-63.78,66.52,50</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Sensor Beta</name>
+      <Point><coordinates>-63.80,66.50,50</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
+EOF
+
+# Test --union (default) - single file
+rm -rf /tmp/test_union
+rangeplotter horizon --config config/config.yaml --input /tmp/test_multi_sensor.kml --output /tmp/test_union --union 2>&1 | tail -3
+echo "=== Union output (single file) ==="
+ls -la /tmp/test_union/
+
+# Test --no-union - per-sensor files
+rm -rf /tmp/test_no_union
+rangeplotter horizon --config config/config.yaml --input /tmp/test_multi_sensor.kml --output /tmp/test_no_union --no-union 2>&1 | tail -3
+echo "=== No-union output (per-sensor files) ==="
+ls -la /tmp/test_no_union/
+```
+
+**Expected:**
+- `--union`: Single file `rangeplotter-union-horizon.kml`
+- `--no-union`: Two files like `01_rangeplotter-Sensor_Alpha-horizon.kml` and `02_rangeplotter-Sensor_Beta-horizon.kml`
+
+---
+
+### Test 6: C5 - Altitude Flag Rename
+
+**Purpose:** Verify --altitude works and --altitudes shows deprecation warning.
+
+```bash
+# Test 1: New --altitude flag appears in help
+rangeplotter viewshed --help 2>&1 | grep -A1 "\-\-altitude"
+
+# Test 2: Old --altitudes should be hidden (not in help)
+rangeplotter viewshed --help 2>&1 | grep "\-\-altitudes" || echo "✓ --altitudes is hidden (not in help)"
+
+# Test 3: --altitudes still works but shows deprecation warning
+# (This would require a full viewshed run, so we just verify the code path exists)
+grep -n "altitudes.*deprecated\|Deprecated.*altitudes" src/rangeplotter/cli/main.py
+```
+
+**Expected:**
+- `--altitude` appears in help with `-a` shorthand
+- `--altitudes` does NOT appear in help (hidden)
+- Code contains deprecation warning for `--altitudes`
+
+---
+
+### Test 7: C2 - Tab Completion in install.sh
+
+**Purpose:** Verify install.sh uses readline for path input.
+
+```bash
+# Check that read -e is used for path prompts
+grep "read -e" scripts/install.sh
+```
+
+**Expected:** Should see `read -e -p` for the installation directory prompt.
+
+---
+
+### Test 8: Full Test Suite
+
+**Purpose:** Verify all automated tests pass.
+
+```bash
+python -m pytest tests/ -v --tb=short 2>&1 | tail -30
+```
+
+**Expected:** All 143+ tests should pass.
+
+---
+
+### Test 9: Help Output Verification
+
+**Purpose:** Verify CLI help reflects all changes.
+
+```bash
+echo "=== Horizon Command Help ==="
+rangeplotter horizon --help 2>&1 | grep -E "(--union|--output|--no-union)"
+
+echo ""
+echo "=== Viewshed Command Help ==="
+rangeplotter viewshed --help 2>&1 | grep -E "(--altitude|--no-cache)"
+```
+
+**Expected:**
+- Horizon: Shows `--union/--no-union` and `--output`
+- Viewshed: Shows `--altitude` (not `--altitudes`) and `--no-cache`
+
+---
+
+### Cleanup
+
+```bash
+# Remove test files
+rm -f /tmp/test_sensor.kml /tmp/test_multi_sensor.kml
+rm -rf /tmp/test_out /tmp/test_horizon_out /tmp/test_union /tmp/test_no_union
+```
+
+---
+
+### Summary Checklist
+
+| Test | Item | Status |
+|------|------|--------|
+| 1 | F4: Altitude debug logging | ☐ |
+| 2 | C3: Signal handler registration | ☐ |
+| 3 | F2: Output naming convention | ☐ |
+| 4 | F3: Output path interpretation | ☐ |
+| 5 | F1: Horizon union flag | ☐ |
+| 6 | C5: Altitude flag rename | ☐ |
+| 7 | C2: Tab completion in install.sh | ☐ |
+| 8 | Full test suite | ☐ |
+| 9 | Help output verification | ☐ |
