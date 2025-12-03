@@ -36,7 +36,7 @@ rangeplotter viewshed [OPTIONS]
 **Key Options:**
 *   `--input / -i`: Path to input KML/CSV file or directory. Defaults to `working_files/sensor_locations`.
 *   `--output / -o`: Output directory.
-*   `--altitudes / -a`: Comma-separated list of target altitudes to calculate (overrides config).
+*   `--altitude / -a`: Comma-separated list of target altitudes to calculate, or repeated (e.g., `-a 100 -a 500`). Overrides config.
     *   *Example*: `-a 50,100,500`
 *   `--sensor-heights / -sh`: Comma-separated list of sensor heights (AGL) to calculate (overrides config).
     *   *Example*: `-sh 10,20,30`
@@ -61,8 +61,14 @@ Calculates the theoretical maximum geometric horizon (range rings) based on Eart
 rangeplotter horizon [OPTIONS]
 ```
 
+**Key Options:**
+*   `--union/--no-union`: Control output format (default: `--union`).
+    *   `--union`: Output a single `rangeplotter-union-horizon.kml` with all sensors.
+    *   `--no-union`: Output individual `{prefix}rangeplotter-{name}-horizon.kml` files per sensor.
+*   `--output / -o`: Output directory. Pure names go to `working_files/horizons/`, paths with `./`, `../`, or `/` are used as-is.
+
 **Output:**
-Generates a `horizons.kml` file containing range rings for all sensors at the configured target altitudes. Useful for comparing "theoretical max" vs "actual terrain-limited" performance.
+Generates a KML file containing range rings for all sensors at the configured target altitudes. Useful for comparing "theoretical max" vs "actual terrain-limited" performance.
 
 ---
 

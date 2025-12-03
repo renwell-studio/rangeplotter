@@ -25,6 +25,7 @@ from rangeplotter.models.radar_site import RadarSite
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.io.viewshed_cache import ViewshedCache
 from rangeplotter.geo.earth import mutual_horizon_distance, effective_earth_radius
+from rangeplotter.utils.shutdown import is_shutdown_requested
 
 log = logging.getLogger(__name__)
 
@@ -746,6 +747,11 @@ def compute_viewshed(
 
     # Process each zone
     for i, (z_min, z_max, z_res) in enumerate(zones):
+        # Check for shutdown request between zones
+        if is_shutdown_requested():
+            log.info(f"Shutdown requested. Stopping after zone {i}.")
+            break
+            
         if d_max <= z_min:
             continue
             

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import typer
 import psutil
+import signal
 from rich import print, progress
 from rich.table import Table
 from rich.console import Console
@@ -12,6 +13,13 @@ from rangeplotter.los.rings import compute_horizons
 from rangeplotter.io.dem import DemClient, approximate_bounding_box
 from rangeplotter.auth.cdse import CdseAuth
 from rangeplotter.utils.logging import setup_logging, log_memory_usage
+from rangeplotter.utils.shutdown import (
+    is_shutdown_requested, 
+    reset_shutdown_state, 
+    request_shutdown,
+    request_force_quit,
+    cleanup_temp_cache_files
+)
 from rangeplotter.processing import clip_viewshed, union_viewsheds
 from rangeplotter.io.export import export_viewshed_kml
 from rangeplotter.io.csv_input import parse_csv_radars
@@ -23,6 +31,52 @@ import yaml
 import datetime
 
 __version__ = "0.1.6"
+
+def _signal_handler(signum, frame):
+    """Handle Ctrl-C interrupt signal.
+    
+    First interrupt: Set graceful shutdown flag, allowing current operation to finish.
+    Second interrupt: Force quit immediately with cleanup.
+    """
+    if is_shutdown_requested():
+        request_force_quit()
+        print("\n[red]Force quit. Cleaning up...[/red]")
+        cleanup_temp_cache_files()
+        raise SystemExit(1)
+    else:
+        request_shutdown()
+        print("\n[yellow]Interrupt received. Finishing current operation... Press Ctrl-C again to force quit.[/yellow]")
+
+def resolve_output_path(user_path: Optional[Path], default_dir: Path) -> Path:
+    """
+    Resolve user-provided output path.
+    
+    - Pure filename/foldername (no path separators) → place in default_dir
+    - Paths starting with './' or '../' or absolute → use as-is
+    
+    Args:
+        user_path: The path provided by the user, or None
+        default_dir: The default directory to use if user_path is pure name
+        
+    Returns:
+        Resolved Path object
+    """
+    if user_path is None:
+        return default_dir
+        
+    user_path = Path(user_path)
+    
+    # Absolute path: use as-is
+    if user_path.is_absolute():
+        return user_path
+    
+    # Relative path with explicit directory indicator: use as-is
+    path_str = str(user_path)
+    if path_str.startswith('./') or path_str.startswith('../') or '/' in path_str:
+        return user_path
+    
+    # Pure name: place in default directory
+    return default_dir / user_path
 
 app = typer.Typer(help="Radar LOS utility", context_settings={"help_option_names": ["-h", "--help"]})
 app.add_typer(network.app, name="network")
@@ -229,6 +283,7 @@ def horizon(
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to radar KML file or directory"),
     output_dir: Optional[Path] = typer.Option(default_horizon_dir, "--output", "-o", help="Override output directory"),
     filter_pattern: Optional[str] = typer.Option(None, "--filter", help="Regex pattern to filter sensors by name."),
+    union: Optional[bool] = typer.Option(None, "--union/--no-union", help="Union all horizons into single file (default: True). Use --no-union for per-sensor files."),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level: 0=Standard, 1=Info, 2=Debug")
 ):
     """
@@ -236,7 +291,14 @@ def horizon(
     
     This command computes the maximum possible detection range based on Earth curvature 
     and atmospheric refraction (k-factor), ignoring terrain obstructions.
+    
+    By default, outputs a single file with all horizons. Use --no-union to output
+    individual files per sensor.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     import rangeplotter
     # print(f"DEBUG: rangeplotter imported from {rangeplotter.__file__}")
@@ -316,7 +378,27 @@ def horizon(
         
         r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
         if verbose >= 1:
-            print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+            print(f"    [green]✓[/green] Ground elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+        
+        # Log how radar height is being calculated based on altitude mode
+        if verbose >= 2:
+            h_agl = r.sensor_height_m_agl
+            if isinstance(h_agl, list):
+                h_agl_str = f"[{', '.join(f'{h:.1f}' for h in h_agl)}]"
+            else:
+                h_agl_str = f"{h_agl:.1f}"
+            
+            if r.altitude_mode == "relativeToGround":
+                kml_agl = r.input_altitude or 0.0
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: relativeToGround mode - KML altitude ({kml_agl:.1f}m AGL) + DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+            elif r.altitude_mode == "clampToGround":
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: clampToGround mode - DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+            elif r.altitude_mode == "absolute":
+                kml_abs = r.input_altitude or r.ground_elevation_m_msl
+                radar_h = r.radar_height_m_msl or 0.0
+                log.debug(f"{r.name}: absolute mode - KML altitude ({kml_abs:.1f}m MSL) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
 
     if verbose >= 2:
         print("[grey58]DEBUG: Starting horizon computation loop.")
@@ -339,16 +421,16 @@ def horizon(
     if verbose >= 2:
         print("[grey58]DEBUG: Horizon computation finished. Beginning export.")
     
-    if output_dir:
-        out_path = output_dir
-    else:
-        out_path = default_horizon_dir
-
+    # Resolve output directory using F3 logic
+    out_path = resolve_output_path(output_dir, default_horizon_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-    from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
-    kml_path = out_path / "horizons.kml"
     
-    metadata = {
+    from rangeplotter.io.export import export_horizons_kml  # lazy import to avoid loading pyproj for other commands
+    
+    # Resolve union setting (default: True)
+    do_union = union if union is not None else settings.union_outputs
+    
+    base_metadata = {
         "Utility": f"RangePlotter {__version__}",
         "Command": "horizon",
         "Date": datetime.datetime.now().isoformat(),
@@ -356,10 +438,41 @@ def horizon(
         "Refraction Factor (k)": settings.atmospheric_k_factor,
     }
     
-    export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=metadata)
-    if verbose >= 2:
-        print("[grey58]DEBUG: Export complete.")
-    print(f"[green]Exported horizons to {kml_path}[/green]")
+    if do_union:
+        # Single file with all horizons
+        kml_path = out_path / "rangeplotter-union-horizon.kml"
+        export_horizons_kml(str(kml_path), rings_all, meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=base_metadata)
+        if verbose >= 2:
+            print("[grey58]DEBUG: Export complete.")
+        print(f"[green]Exported horizons to {kml_path}[/green]")
+    else:
+        # Per-sensor files
+        exported_files = []
+        for i, r in enumerate(radars, 1):
+            safe_name = r.name.replace(" ", "_").replace("/", "-")
+            prefix = f"{i:02d}_"
+            filename = f"{prefix}rangeplotter-{safe_name}-horizon.kml"
+            kml_path = out_path / filename
+            
+            # Filter rings and meta for this sensor only
+            sensor_rings = {r.name: rings_all[r.name]}
+            sensor_meta = {r.name: meta[r.name]}
+            
+            sensor_metadata = base_metadata.copy()
+            sensor_metadata.update({
+                "Sensor Name": r.name,
+                "Sensor Location": f"{r.latitude:.5f}, {r.longitude:.5f}",
+                "Sensor Ground Elevation": f"{r.ground_elevation_m_msl:.1f} m MSL" if r.ground_elevation_m_msl else "N/A",
+            })
+            
+            export_horizons_kml(str(kml_path), sensor_rings, sensor_meta, style=settings.style.model_dump(), kml_export_mode=settings.kml_export_altitude_mode, metadata=sensor_metadata)
+            exported_files.append(kml_path)
+            if verbose >= 1:
+                print(f"  [green]✓[/green] {filename}")
+        
+        if verbose >= 2:
+            print("[grey58]DEBUG: Export complete.")
+        print(f"[green]Exported {len(exported_files)} horizon files to {out_path}[/green]")
     
     end_time = time.time()
     total_time = end_time - start_time
@@ -372,7 +485,8 @@ def viewshed(
     config: Optional[Path] = typer.Option(None, "--config", help="Path to config YAML"),
     input_path: Optional[Path] = typer.Option(default_input_dir, "--input", "-i", help="Path to input directory or KML file. If file not found, checks working_files/sensor_locations/."),
     output_dir: Optional[Path] = typer.Option(default_viewshed_dir, "--output", "-o", help="Path to output directory"),
-    altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitudes", "-a", help="Target altitudes in meters (comma separated). Overrides config."),
+    altitudes_cli: Optional[List[str]] = typer.Option(None, "--altitude", "-a", help="Target altitudes in meters (comma separated or repeated: -a 100 -a 500). Overrides config."),
+    altitudes_cli_hidden: Optional[List[str]] = typer.Option(None, "--altitudes", help="Deprecated alias for --altitude.", hidden=True),
     sensor_heights_cli: Optional[List[str]] = typer.Option(None, "--sensor-heights", "-sh", help="Sensor heights AGL in meters (comma separated). Overrides config."),
     reference_cli: Optional[str] = typer.Option(None, "--reference", "--ref", help="Target altitude reference: 'msl' or 'agl'. Overrides config."),
     download_only: bool = typer.Option(False, "--download-only", help="Download DEM tiles only, skip viewshed calculation."),
@@ -394,16 +508,26 @@ def viewshed(
 
     Outputs are saved as individual KML files per site and target altitude.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     if config:
         settings = Settings.from_file(config)
     else:
         settings = load_settings()
     
+    # Merge --altitudes (deprecated) with --altitude if both used
+    combined_altitudes_cli = altitudes_cli or []
+    if altitudes_cli_hidden:
+        print("[yellow]Warning: --altitudes is deprecated. Use --altitude instead.[/yellow]")
+        combined_altitudes_cli = list(combined_altitudes_cli) + list(altitudes_cli_hidden)
+    
     # Override altitudes if provided via CLI
-    if altitudes_cli:
+    if combined_altitudes_cli:
         parsed_alts = []
-        for a_str in altitudes_cli:
+        for a_str in combined_altitudes_cli:
             parts = a_str.split(',')
             for p in parts:
                 try:
@@ -470,6 +594,14 @@ def viewshed(
         verbose=verbose
     )
 
+    # Friendly auth check
+    if not auth.ensure_access_token():
+        print("\n[bold red]Authentication Failed[/bold red]")
+        print("Could not obtain an access token from Copernicus Data Space Ecosystem.")
+        print("Please check your .env file or run 'rangeplotter extract-refresh-token'.")
+        print("See README for details.\n")
+        raise typer.Exit(code=1)
+
     dem_cache = Path(settings.cache_dir) / "dem"
     dem_client = DemClient(
         base_url=settings.copernicus_api.base_url,
@@ -516,7 +648,27 @@ def viewshed(
             dem_client.ensure_tiles(bbox_local)
             r.ground_elevation_m_msl = dem_client.sample_elevation(r.longitude, r.latitude)
             if verbose >= 1:
-                print(f"    [green]✓[/green] Elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+                print(f"    [green]✓[/green] Ground elevation: {r.ground_elevation_m_msl:.1f} m MSL")
+            
+            # Log how radar height is being calculated based on altitude mode
+            if verbose >= 2:
+                h_agl = r.sensor_height_m_agl
+                if isinstance(h_agl, list):
+                    h_agl_str = f"[{', '.join(f'{h:.1f}' for h in h_agl)}]"
+                else:
+                    h_agl_str = f"{h_agl:.1f}"
+                
+                if r.altitude_mode == "relativeToGround":
+                    kml_agl = r.input_altitude or 0.0
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: relativeToGround mode - KML altitude ({kml_agl:.1f}m AGL) + DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+                elif r.altitude_mode == "clampToGround":
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: clampToGround mode - DEM ground ({r.ground_elevation_m_msl:.1f}m) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
+                elif r.altitude_mode == "absolute":
+                    kml_abs = r.input_altitude or r.ground_elevation_m_msl
+                    radar_h = r.radar_height_m_msl or 0.0
+                    log.debug(f"{r.name}: absolute mode - KML altitude ({kml_abs:.1f}m MSL) + sensor height ({h_agl_str}m) = {radar_h:.1f}m MSL")
 
     # Interactive check for missing local tiles
     local_tiles_fixed = False
@@ -605,12 +757,8 @@ def viewshed(
     from rangeplotter.los.viewshed import compute_viewshed
     from rangeplotter.io.export import export_viewshed_kml
     
-    if output_dir:
-        # User specified output directory, use it directly
-        out_dir_path = Path(output_dir)
-    else:
-        # Default behavior: use config output_dir + /viewshed
-        out_dir_path = Path(settings.output_viewshed_dir)
+    # Resolve output directory using F3 logic
+    out_dir_path = resolve_output_path(output_dir, Path(settings.output_viewshed_dir))
         
     out_dir_path.mkdir(parents=True, exist_ok=True)
     
@@ -667,6 +815,13 @@ def viewshed(
         current_step = 0
         
         for sensor, sensor_h, alt in tasks_to_run:
+            # Check for graceful shutdown request
+            if is_shutdown_requested():
+                prog.console.print("[yellow]Shutdown requested. Stopping after cleanup...[/yellow]")
+                cleanup_temp_cache_files()
+                print(f"\n[bold]Interrupted. Completed {current_step // 100} of {len(tasks_to_run)} viewsheds.[/bold]")
+                raise typer.Exit(code=130)  # 130 = 128 + SIGINT(2)
+            
             # Temporarily override sensor height for calculation
             # We need to be careful not to permanently modify the sensor object if we are iterating
             original_h = sensor.sensor_height_m_agl
@@ -856,6 +1011,10 @@ def detection_range(
     """
     Clip viewsheds to detection ranges and union them if multiple sensors are provided.
     """
+    # Register signal handler for graceful shutdown
+    reset_shutdown_state()
+    signal.signal(signal.SIGINT, _signal_handler)
+    
     start_time = time.time()
     created_files = []
 
@@ -999,6 +1158,8 @@ def detection_range(
             by_alt_ref[key] = []
         by_alt_ref[key].append(item)
 
+    # Resolve output directory using F3 logic
+    output_dir = resolve_output_path(output_dir, default_detection_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Process
@@ -1125,11 +1286,7 @@ def detection_range(
                                 "fill_opacity": 0.3
                             }
                         
-                        # Create specific output directory
-                        specific_out_dir = output_dir / base_name
-                        specific_out_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Construct filename
+                        # Construct filename (flat structure - no subfolders)
                         alt_str = f"{int(alt)}" if alt.is_integer() else f"{alt}"
                         rng_str = f"{int(rng)}" if rng.is_integer() else f"{rng}"
                         ref_suffix = f"_{ref}" if ref else ""
@@ -1182,7 +1339,7 @@ def detection_range(
 
                         export_viewshed_kml(
                             viewshed_polygon=task_poly,
-                            output_path=specific_out_dir / filename,
+                            output_path=output_dir / filename,
                             altitude=alt,
                             style_config=style_to_use,
                             sensors=sensors_list,
@@ -1196,7 +1353,7 @@ def detection_range(
                             "altitude": alt,
                             "range": rng,
                             "filename": filename,
-                            "path": specific_out_dir / filename
+                            "path": output_dir / filename
                         })
             
             # Advance progress bar for the group

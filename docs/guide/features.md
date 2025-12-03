@@ -11,6 +11,28 @@ You can override this for specific sensors directly in your input KML file:
 
 RangePlotter will detect this setting and use 20m as the sensor height for that specific site, while using the default for others.
 
+## KML Altitude Mode Interpretation
+
+RangePlotter correctly interprets the KML `altitudeMode` setting for sensor placemarks. The ground elevation is always determined using the Copernicus GLO-30 Digital Elevation Model (DEM), ensuring consistency regardless of differences in Google Earth's terrain model.
+
+| KML Altitude Mode | Interpretation |
+|-------------------|----------------|
+| `clampToGround` | Sensor placed at DEM ground level. Uses `sensor_height_m_agl` from config as height above ground. |
+| `relativeToGround` | Sensor placed at the specified altitude above DEM ground. The altitude value from KML is used as the height above ground. |
+| `absolute` | Sensor placed at the specified MSL altitude. The altitude value from KML is interpreted as meters above mean sea level. |
+
+**Note:** When using `relativeToGround` or `absolute` modes in Google Earth, RangePlotter ignores the `sensor_height_m_agl` config setting for those specific sensors since the KML already specifies the sensor altitude.
+
+Use `-vv` (verbose debug) to see detailed logging of how sensor altitudes are calculated:
+```bash
+rangeplotter viewshed -i input.kml -vv
+```
+
+Example debug output:
+```
+[DEBUG] Brevoort_LRR: relativeToGround mode - KML altitude (25.0m AGL) + DEM ground (45.3m) + sensor height (0.0m) = 70.3m MSL
+```
+
 ## Offline Capability
 RangePlotter is designed to be bandwidth-efficient. It checks your local cache for Digital Elevation Model (DEM) tiles before attempting to download them.
 

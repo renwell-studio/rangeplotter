@@ -23,7 +23,8 @@ echo "Source directory: $SOURCE_DIR"
 # Default install location
 DEFAULT_INSTALL_DIR="$HOME/rangeplotter"
 
-read -p "Enter installation directory [$DEFAULT_INSTALL_DIR]: " INSTALL_DIR
+# Use -e for readline support (tab completion for paths)
+read -e -p "Enter installation directory [$DEFAULT_INSTALL_DIR]: " INSTALL_DIR
 INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}
 
 echo "Installing to: $INSTALL_DIR"

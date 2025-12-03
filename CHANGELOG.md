@@ -10,14 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Viewshed Caching (MVA Surfaces)**: Implemented physics-level caching using Minimum Visible Altitude (MVA) surfaces. The expensive radial sweep computation is now cached and reused across different target altitudes and styling options, providing ~10x speedup for multi-altitude analyses like `detection-range`.
 - **`--no-cache` Flag**: Added `--no-cache` option to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations.
 - **Cache Versioning**: MVA cache files include a version identifier. Algorithm updates automatically invalidate stale caches without manual intervention.
+- **Altitude Mode Debug Logging**: Added debug logging (`-vv`) to show how sensor altitudes are calculated from KML altitude modes and DEM ground elevation.
+- **Graceful Ctrl-C Handling**: Commands now handle keyboard interrupts gracefully:
+  - First Ctrl-C: Prints message and finishes current operation, then exits cleanly
+  - Second Ctrl-C: Immediate termination with cleanup
+  - Partial cache files (`.tmp.*`) are automatically cleaned up on interrupt
+
+### Fixed
+- **Authentication Check in Viewshed**: Added explicit authentication check to the `viewshed` command before DEM operations, matching `horizon` command behavior. Provides friendly error message on auth failure.
+- **Install Script Tab Completion**: Added readline support (`read -e`) to the install script for directory path tab completion.
 
 ### Changed
 - **Two-Tier Cache Architecture**: RangePlotter now uses a two-tier caching system:
   - **Tier 1 (ViewshedCache)**: Caches MVA rasters (physics layer) - reusable across altitudes and styles.
   - **Tier 2 (StateManager)**: Tracks output KML validity - includes target altitude and styling in hash.
+- **Consistent Output Naming**: Standardized output file naming across commands:
+  - `detection-range`: Files now output to a flat folder structure (removed per-sensor subfolders)
+  - `horizon`: Renamed output file from `horizons.kml` to `rangeplotter-union-horizon.kml`
+- **Output Path Interpretation**: The `--output` flag now interprets paths consistently:
+  - Pure names (e.g., `my_output`): Placed in default directory (e.g., `working_files/horizons/my_output`)
+  - Paths with `./`, `../`, or `/`: Used as-is (relative or absolute paths)
+- **Horizon Union Flag**: Added `--union/--no-union` flag to `horizon` command. When `--no-union` is specified, outputs individual `{prefix}rangeplotter-{name}-horizon.kml` files per sensor instead of a single union file.
+- **Altitude Flag Rename**: Renamed `--altitudes` to `--altitude` in the `viewshed` command. The old `--altitudes` flag remains as a hidden alias for backward compatibility. The new flag also supports repeated use (e.g., `-a 100 -a 500`).
 
 ### Documentation
 - **Data Caching Guide**: Added comprehensive caching documentation to the User Guide (`docs/guide/features.md`), covering DEM tile cache, viewshed MVA cache, cache management commands, and the two-tier architecture.
+- **KML Altitude Mode Interpretation**: Documented how RangePlotter interprets KML `altitudeMode` settings (clampToGround, relativeToGround, absolute) using Copernicus DEM as ground reference.
 
 ## [0.1.6] - 2025-11-30
 ### Added
