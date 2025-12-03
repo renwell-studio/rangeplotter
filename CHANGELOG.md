@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.7-rc1] - 2025-12-02
+## [Unreleased] - v0.2.0
+
+This is a significant rework of the caching system. The 0.1.7-rc1 release was withdrawn due to cache architecture issues that caused excessive cache file creation. v0.2.0 addresses these issues with a complete redesign.
+
+### Added
+- **Unified Viewshed Cache**: Single cache file per sensor location, independent of target altitude
+- **Compact Cache Format**: NPZ storage with UInt16 quantization (0.5m precision), reducing cache file sizes by ~90%
+- **Incremental Cache Extension**: When larger radius is needed, extends existing cache instead of recomputing from scratch
+- **Lazy DEM Loading**: Only fetches DEM tiles for extension regions, not already-cached areas
+
+### Changed
+- **Cache Architecture Rework**: 
+  - Moved cache module from `io/viewshed_cache.py` to dedicated `cache/` package
+  - Separated MVA computation (`los/mva.py`) from orchestration (`los/viewshed.py`)
+  - Cache key no longer includes zone boundaries or target altitude
+- **Storage Format**: Replaced GeoTIFF Float32 with NumPy compressed UInt16 (NPZ)
+- **Cache Version**: Bumped to v2, automatically invalidating old caches
+
+### Removed
+- **Rasterio dependency** in cache module (replaced with pure NumPy I/O)
+
+---
+
+## [0.1.7-rc1] - 2025-12-02 [WITHDRAWN]
+
+> ⚠️ **This release was withdrawn.** The caching implementation created separate cache files for each target altitude instead of reusing a single cache. This has been fixed in v0.2.0.
+
 ### Added
 - **Viewshed Caching (MVA Surfaces)**: Implemented physics-level caching using Minimum Visible Altitude (MVA) surfaces. The expensive radial sweep computation is now cached and reused across different target altitudes and styling options, providing ~10x speedup for multi-altitude analyses like `detection-range`.
 - **`--no-cache` Flag**: Added `--no-cache` option to the `viewshed` command to bypass the MVA cache for debugging or forcing fresh calculations.
