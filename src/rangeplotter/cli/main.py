@@ -30,7 +30,7 @@ import re
 import yaml
 import datetime
 
-__version__ = "0.1.6"
+__version__ = "0.1.7-rc1"
 
 def _signal_handler(signum, frame):
     """Handle Ctrl-C interrupt signal.
